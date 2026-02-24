@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+CONDA_PYTHON="/home/tobias/miniconda3/envs/ifc_ui/bin/python"
 VENV_PYTHON3="${ROOT_DIR}/.venv/bin/python3"
 VENV_PYTHON="${ROOT_DIR}/.venv/bin/python"
 LOG_DIR="${XDG_CACHE_HOME:-${HOME}/.cache}/ifc-rule-checker"
@@ -32,7 +33,7 @@ notify_error() {
 
 pick_python() {
   local candidate
-  for candidate in "${VENV_PYTHON3}" "${VENV_PYTHON}" "python3" "python"; do
+  for candidate in "${CONDA_PYTHON}" "${VENV_PYTHON3}" "${VENV_PYTHON}" "python3" "python"; do
     if [[ "${candidate}" = "python3" || "${candidate}" = "python" ]]; then
       if ! command -v "${candidate}" >/dev/null 2>&1; then
         continue
