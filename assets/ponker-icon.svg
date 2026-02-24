@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <rect x="16" y="16" width="224" height="224" rx="42" fill="#0B0F18"/>
+
+  <path
+    fill-rule="evenodd"
+    fill="#E5E7EB"
+    d="M80 48H126V86H158C185 86 206 107 206 132C206 157 185 178 158 178H126V208H80V48ZM126 116V148H154C162 148 168 141 168 132C168 123 162 116 154 116H126Z"
+  />
+
+  <polygon fill="#FF2E88" points="80,48 88,30 96,48 103,22 110,48 118,30 126,48"/>
+</svg>

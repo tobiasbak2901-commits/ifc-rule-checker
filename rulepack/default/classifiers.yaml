@@ -1,0 +1,64 @@
+classifiers:
+  - className: Drainage
+    matchers:
+      - systemGroupNameContainsAny:
+          - drain
+          - drainage
+          - draen
+          - afloeb
+          - regn
+          - spildevand
+          - sewer
+      - systemGroupNameNotContainsAny:
+          - cold water
+          - hot water
+          - domestic water
+      - ifcTypeIn:
+          - IfcPipeSegment
+          - IfcPipeFitting
+          - IfcFlowSegment
+          - IfcFlowFitting
+      - typeNameContainsAny:
+          - drain
+          - drainage
+          - draen
+          - afloeb
+          - regn
+          - spildevand
+          - sewer
+      - nameContainsAny:
+          - drain
+          - drainage
+          - draen
+          - afloeb
+          - regn
+          - spildevand
+          - sewer
+      - systemNameContainsAny:
+          - drain
+          - drainage
+          - afloeb
+          - regn
+          - spildevand
+          - sewer
+      - psetEqualsAny:
+          pset: Pset_SystemTypeCommon
+          prop: SystemType
+          containsAny:
+            - Drain
+            - Drainage
+            - Sewer
+      - psetValueContainsAny:
+          keys:
+            - SystemName
+            - SystemType
+            - Reference
+            - Description
+          values:
+            - drain
+            - drainage
+            - draen
+            - afloeb
+            - regn
+            - spildevand
+            - sewer

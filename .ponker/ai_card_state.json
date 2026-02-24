@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "issues": {
+    "3uSfr7z0144v3nIyFywH8p|3uSfr7z0144v3nIyFywH9f|default": {
+      "issue_id": "3uSfr7z0144v3nIyFywH8p|3uSfr7z0144v3nIyFywH9f|default",
+      "active_step": "APPLY",
+      "completed_steps": [],
+      "pinned_assumptions": [],
+      "notes": {},
+      "chosen_owner": null,
+      "chosen_fix_id": null,
+      "last_updated_ts": 1771440674.8611486
+    },
+    "__no_issue__": {
+      "issue_id": "__no_issue__",
+      "active_step": "CONTEXT",
+      "completed_steps": [],
+      "pinned_assumptions": [],
+      "notes": {},
+      "chosen_owner": null,
+      "chosen_fix_id": null,
+      "last_updated_ts": 1771442230.6342595
+    },
+    "clash:dcb3d91745090352bbe663f7c1cd0c57ed6118ae": {
+      "issue_id": "clash:dcb3d91745090352bbe663f7c1cd0c57ed6118ae",
+      "active_step": "MOVEABILITY",
+      "completed_steps": [],
+      "pinned_assumptions": [],
+      "notes": {},
+      "chosen_owner": null,
+      "chosen_fix_id": null,
+      "last_updated_ts": 1771446997.5322206
+    }
+  }
+}

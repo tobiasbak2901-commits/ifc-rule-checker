@@ -1,0 +1,13 @@
+sources:
+  - id: DS475#5.3
+    title: DS 475 - installationsafstande
+    doc_file: standards/ds475_excerpt.md
+    page_range: "22-23"
+    excerpt: "Foeringsveje og installationer skal have dokumenteret friafstand i projekteringsfasen."
+    tags: [clearance, clash, ventilation, piping]
+  - id: EN12056#6.2
+    title: EN 12056 - gravity drainage constraints
+    doc_file: standards/en12056_excerpt.md
+    page_range: "31"
+    excerpt: "Afstande mellem afloebssystemer og oevrige tekniske systemer skal muliggore serviceadgang."
+    tags: [sanitary, drainage, service, distance]

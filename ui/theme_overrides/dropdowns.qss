@@ -1,0 +1,160 @@
+QComboBox QAbstractItemView,
+QAbstractItemView#FindObjectsComboPopup[themeScope="app"],
+QComboBox#FindObjectsScopeCombo QAbstractItemView[themeScope="app"],
+QComboBox#FindObjectsCategoryCombo QAbstractItemView[themeScope="app"],
+QComboBox#FindObjectsPropertyCombo QAbstractItemView[themeScope="app"],
+QComboBox#FindObjectsOperatorCombo QAbstractItemView[themeScope="app"],
+QComboBox#FindObjectsValueChoice QAbstractItemView[themeScope="app"] {
+    background: ${menu_bg_alt};
+    color: ${menu_text};
+    border: 1px solid ${menu_border};
+    border-radius: 8px;
+    outline: 0px;
+    padding: 2px;
+    selection-background-color: ${menu_item_selected_bg};
+    selection-color: ${menu_text_active};
+}
+QAbstractItemView#FindObjectsComboPopup[themeScope="app"]:focus {
+    border-color: ${menu_focus_border};
+}
+QComboBox QAbstractItemView:focus {
+    border-color: ${menu_focus_border};
+}
+QComboBox QAbstractItemView::item {
+    min-height: 22px;
+    padding: 4px 8px;
+    background: transparent;
+    color: ${menu_text};
+}
+QComboBox QAbstractItemView::item:hover {
+    background: ${menu_item_hover_bg};
+    color: ${menu_text_active};
+}
+QComboBox QAbstractItemView::item:selected {
+    background: ${menu_item_selected_bg};
+    color: ${menu_text_active};
+}
+QAbstractItemView#FindObjectsComboPopup[themeScope="app"]::item {
+    min-height: 22px;
+    padding: 4px 8px;
+    background: transparent;
+    color: ${menu_text};
+}
+QAbstractItemView#FindObjectsComboPopup[themeScope="app"]::item:hover {
+    background: ${menu_item_hover_bg};
+    color: ${menu_text_active};
+}
+QAbstractItemView#FindObjectsComboPopup[themeScope="app"]::item:selected {
+    background: ${menu_item_selected_bg};
+    color: ${menu_text_active};
+}
+QAbstractItemView#FindObjectsComboPopup[themeScope="app"] QScrollBar:vertical {
+    background: ${menu_scrollbar_bg};
+    width: 10px;
+    border: none;
+    margin: 2px;
+}
+QAbstractItemView#FindObjectsComboPopup[themeScope="app"] QScrollBar::handle:vertical {
+    background: ${menu_scrollbar_handle};
+    min-height: 28px;
+    border-radius: 5px;
+}
+QAbstractItemView#FindObjectsComboPopup[themeScope="app"] QScrollBar::handle:vertical:hover {
+    background: ${menu_scrollbar_handle_hover};
+}
+QAbstractItemView#FindObjectsComboPopup[themeScope="app"] QScrollBar::add-line:vertical,
+QAbstractItemView#FindObjectsComboPopup[themeScope="app"] QScrollBar::sub-line:vertical,
+QAbstractItemView#FindObjectsComboPopup[themeScope="app"] QScrollBar::add-page:vertical,
+QAbstractItemView#FindObjectsComboPopup[themeScope="app"] QScrollBar::sub-page:vertical {
+    height: 0px;
+    background: transparent;
+}
+QMenu,
+QMenu#FindObjectsSuggestMenu[themeScope="app"],
+QMenu#FindObjectsConditionSettingsMenu[themeScope="app"],
+QMenu#FindObjectsMoreMenu[themeScope="app"] {
+    background: ${menu_bg_alt};
+    border: 1px solid ${menu_border};
+    border-radius: 8px;
+    padding: 6px;
+    color: ${menu_text};
+}
+QMenu::item {
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: transparent;
+    color: ${menu_text};
+}
+QMenu::item:selected {
+    background: ${menu_item_hover_bg};
+    color: ${menu_text_active};
+}
+QMenu::item:disabled {
+    color: ${menu_item_disabled_text};
+}
+QMenu::separator {
+    height: 1px;
+    margin: 5px 8px;
+    background: ${menu_separator};
+}
+QMenu#FindObjectsSuggestMenu[themeScope="app"]::item,
+QMenu#FindObjectsConditionSettingsMenu[themeScope="app"]::item,
+QMenu#FindObjectsMoreMenu[themeScope="app"]::item {
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: transparent;
+    color: ${menu_text};
+}
+QMenu#FindObjectsSuggestMenu[themeScope="app"]::item:selected,
+QMenu#FindObjectsConditionSettingsMenu[themeScope="app"]::item:selected,
+QMenu#FindObjectsMoreMenu[themeScope="app"]::item:selected {
+    background: ${menu_item_hover_bg};
+    color: ${menu_text_active};
+}
+QMenu#FindObjectsSuggestMenu[themeScope="app"]::item:disabled,
+QMenu#FindObjectsConditionSettingsMenu[themeScope="app"]::item:disabled,
+QMenu#FindObjectsMoreMenu[themeScope="app"]::item:disabled {
+    color: ${menu_item_disabled_text};
+}
+QMenu#FindObjectsSuggestMenu[themeScope="app"]::separator,
+QMenu#FindObjectsConditionSettingsMenu[themeScope="app"]::separator,
+QMenu#FindObjectsMoreMenu[themeScope="app"]::separator {
+    height: 1px;
+    margin: 5px 8px;
+    background: ${menu_separator};
+}
+QMenu#FindObjectsSuggestMenu[themeScope="app"] QScrollBar:vertical,
+QMenu#FindObjectsConditionSettingsMenu[themeScope="app"] QScrollBar:vertical,
+QMenu#FindObjectsMoreMenu[themeScope="app"] QScrollBar:vertical {
+    width: 10px;
+    background: ${menu_scrollbar_bg};
+    border: none;
+    margin: 2px;
+}
+QMenu#FindObjectsSuggestMenu[themeScope="app"] QScrollBar::handle:vertical,
+QMenu#FindObjectsConditionSettingsMenu[themeScope="app"] QScrollBar::handle:vertical,
+QMenu#FindObjectsMoreMenu[themeScope="app"] QScrollBar::handle:vertical {
+    background: ${menu_scrollbar_handle};
+    border-radius: 5px;
+    min-height: 24px;
+}
+QMenu#FindObjectsSuggestMenu[themeScope="app"] QScrollBar::handle:vertical:hover,
+QMenu#FindObjectsConditionSettingsMenu[themeScope="app"] QScrollBar::handle:vertical:hover,
+QMenu#FindObjectsMoreMenu[themeScope="app"] QScrollBar::handle:vertical:hover {
+    background: ${menu_scrollbar_handle_hover};
+}
+QMenu#FindObjectsSuggestMenu[themeScope="app"] QScrollBar::add-line:vertical,
+QMenu#FindObjectsSuggestMenu[themeScope="app"] QScrollBar::sub-line:vertical,
+QMenu#FindObjectsSuggestMenu[themeScope="app"] QScrollBar::add-page:vertical,
+QMenu#FindObjectsSuggestMenu[themeScope="app"] QScrollBar::sub-page:vertical,
+QMenu#FindObjectsConditionSettingsMenu[themeScope="app"] QScrollBar::add-line:vertical,
+QMenu#FindObjectsConditionSettingsMenu[themeScope="app"] QScrollBar::sub-line:vertical,
+QMenu#FindObjectsConditionSettingsMenu[themeScope="app"] QScrollBar::add-page:vertical,
+QMenu#FindObjectsConditionSettingsMenu[themeScope="app"] QScrollBar::sub-page:vertical,
+QMenu#FindObjectsMoreMenu[themeScope="app"] QScrollBar::add-line:vertical,
+QMenu#FindObjectsMoreMenu[themeScope="app"] QScrollBar::sub-line:vertical,
+QMenu#FindObjectsMoreMenu[themeScope="app"] QScrollBar::add-page:vertical,
+QMenu#FindObjectsMoreMenu[themeScope="app"] QScrollBar::sub-page:vertical {
+    height: 0px;
+    background: transparent;
+}

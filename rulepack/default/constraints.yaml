@@ -1,0 +1,13 @@
+maxMove:
+  Drainage: 800.0
+  IfcPipeSegment: 800.0
+  IfcPipeFitting: 800.0
+allowedAxes:
+  Drainage: [x, y]
+zAllowed:
+  Drainage: false
+slope:
+  enabled: true
+  minSlopePermille: 5.0
+  classes:
+    - Drainage

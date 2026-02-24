@@ -1,0 +1,10 @@
+clearanceMatrix:
+  - typeA: Drainage
+    typeB: Drainage
+    mm: 300.0
+  - typeA: Drainage
+    typeB: "*"
+    mm: 300.0
+  - typeA: "*"
+    typeB: Drainage
+    mm: 300.0

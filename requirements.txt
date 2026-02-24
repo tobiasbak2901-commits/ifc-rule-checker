@@ -1,0 +1,6 @@
+PySide6
+vtk
+ifcopenshell
+numpy
+matplotlib
+pyyaml

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#15415a"/>
+      <stop offset="1" stop-color="#0d2433"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8b63d"/>
+      <stop offset="1" stop-color="#f27f3d"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="16" y="16" width="224" height="224" rx="44" fill="url(#bg)"/>
+
+  <g transform="translate(0,2)">
+    <polygon points="64,70 128,42 192,70 128,98" fill="#d5e7f2"/>
+    <polygon points="64,70 64,140 128,170 128,98" fill="#9ec2d8"/>
+    <polygon points="192,70 192,140 128,170 128,98" fill="#79a7c2"/>
+    <polygon points="86,120 128,102 170,120 128,138" fill="url(#accent)"/>
+  </g>
+
+  <rect x="42" y="178" width="172" height="42" rx="16" fill="#ffffff" opacity="0.95"/>
+  <text x="128" y="206" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="24" font-weight="700" fill="#15384d">IFC</text>
+</svg>

@@ -1,0 +1,43 @@
+metadata:
+  name: DCW vs Sanitary
+  version: "1.0"
+  debug_classification: true
+
+classification:
+  utilities:
+    dcw:
+      label: DCW
+      system_group_regex:
+        - "\\bdcw\\b"
+        - "domestic\\s*cold\\s*water"
+        - "cold\\s*water"
+    sanitary:
+      label: Sanitary
+      system_group_regex:
+        - "\\bsanitary\\b"
+        - "soil"
+        - "waste\\s*water"
+        - "foul\\s*water"
+        - "afloeb|afl[oø]b|dr[aæ]n"
+
+rules:
+  - id: dcw_sanitary_parallel
+    type: min_distance_between_utilities
+    applies_to:
+      utility_a: dcw
+      utility_b: sanitary
+      relation: parallel
+    constraint:
+      min_distance: 0.5
+      unit: m
+      measure: clear_distance
+  - id: dcw_sanitary_crossing
+    type: min_distance_between_utilities
+    applies_to:
+      utility_a: dcw
+      utility_b: sanitary
+      relation: crossing
+    constraint:
+      min_distance: 0.1
+      unit: m
+      measure: clear_distance

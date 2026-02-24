@@ -1,0 +1,9 @@
+defaultClearanceMm: 300.0
+defaultMaxMoveMm: 800.0
+movePriority:
+  class:
+    Drainage: 0.0
+  discipline:
+    Drainage: 0.0
+  type: {}
+protectedClasses: []

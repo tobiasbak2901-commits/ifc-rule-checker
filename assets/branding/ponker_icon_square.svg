@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Ponker icon square master">
+  <!--
+  PONKER_ICON_CONSTANTS = {
+    "canvas": 1024,
+    "safe_area_ratio": 0.84,
+    "colors": {
+      "bg_edge": "#0B0F18",
+      "bg_center": "#141A28",
+      "bg_vignette": "#03050A",
+      "p_color": "#E5E7EB",
+      "spike_base": "#FF2D8D",
+      "spike_tip": "#FF4FB0"
+    },
+    "p_geometry": {
+      "stem_x": 256, "stem_y": 188, "stem_w": 90, "stem_h": 648, "stem_rx": 34,
+      "bowl_x": 324, "bowl_y": 306, "bowl_w": 420, "bowl_h": 396, "bowl_rx": 184,
+      "counter_path": "M390 420H618C676 420 716 461 716 522C716 583 676 624 618 624H390C365 624 348 607 348 582V462C348 437 365 420 390 420Z",
+      "optical_center_shift_x": -12
+    },
+    "mohawk": {
+      "count": 4,
+      "tilt_deg": 8,
+      "spike_heights": [108, 146, 126, 98],
+      "spike_spacing": 80,
+      "base_y": 236,
+      "notch_between_1_2": true
+    },
+    "preview_corner_radius": 216
+  }
+  -->
+  <defs>
+    <radialGradient id="bg-core" cx="50%" cy="45%" r="72%">
+      <stop offset="0%" stop-color="#141A28"/>
+      <stop offset="58%" stop-color="#0D1220"/>
+      <stop offset="100%" stop-color="#0B0F18"/>
+    </radialGradient>
+    <radialGradient id="bg-vignette" cx="50%" cy="48%" r="74%">
+      <stop offset="62%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#03050A" stop-opacity="0.46"/>
+    </radialGradient>
+    <linearGradient id="bg-brush" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="52%" stop-color="#FFFFFF" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="spike-pink" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FF4FB0"/>
+      <stop offset="100%" stop-color="#FF2D8D"/>
+    </linearGradient>
+    <filter id="spike-shadow-blur" x="-20%" y="-20%" width="140%" height="180%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+
+    <clipPath id="mohawk-clip">
+      <rect x="216" y="64" width="340" height="214"/>
+    </clipPath>
+    <mask id="mohawk-mask" maskUnits="userSpaceOnUse">
+      <rect x="0" y="0" width="1024" height="1024" fill="#FFFFFF"/>
+      <path d="M314 213L333 213L324 189Z" fill="#000000"/>
+    </mask>
+
+    <mask id="p-mask" maskUnits="userSpaceOnUse">
+      <rect x="0" y="0" width="1024" height="1024" fill="#000000"/>
+      <rect x="256" y="188" width="90" height="648" rx="34" fill="#FFFFFF"/>
+      <rect x="324" y="306" width="420" height="396" rx="184" fill="#FFFFFF"/>
+      <path d="M390 420H618C676 420 716 461 716 522C716 583 676 624 618 624H390C365 624 348 607 348 582V462C348 437 365 420 390 420Z" fill="#000000"/>
+    </mask>
+    <clipPath id="p-solid-clip">
+      <rect x="256" y="188" width="90" height="648" rx="34"/>
+      <rect x="324" y="306" width="420" height="396" rx="184"/>
+    </clipPath>
+  </defs>
+
+  <rect x="0" y="0" width="1024" height="1024" fill="url(#bg-core)"/>
+  <rect x="0" y="0" width="1024" height="1024" fill="url(#bg-vignette)"/>
+  <path d="M-140 390L662 88L830 176L30 478Z" fill="url(#bg-brush)" opacity="0.07"/>
+
+  <g clip-path="url(#mohawk-clip)" mask="url(#mohawk-mask)">
+    <path
+      fill="url(#spike-pink)"
+      d="M228 236L258 236L282 128L306 236L334 236L362 90L392 236L418 236L446 110L474 236L498 236L524 138L546 236Z"
+    />
+  </g>
+
+  <rect x="0" y="0" width="1024" height="1024" fill="#E5E7EB" mask="url(#p-mask)"/>
+
+  <g clip-path="url(#p-solid-clip)" opacity="0.12" filter="url(#spike-shadow-blur)">
+    <path d="M244 214C306 208 369 208 432 214C463 217 493 222 522 228L522 248L244 248Z" fill="#000000"/>
+  </g>
+</svg>
