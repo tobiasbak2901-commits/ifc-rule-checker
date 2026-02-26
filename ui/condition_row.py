@@ -293,6 +293,13 @@ class ConditionRow(QtWidgets.QFrame):
         self.row_edit_btn.setVisible(False)
         layout.addWidget(self.row_edit_btn, 0)
 
+        self.reset_btn = QtWidgets.QToolButton(self)
+        self.reset_btn.setObjectName("FindObjectsConditionResetBtn")
+        self.reset_btn.setText("↺")
+        self.reset_btn.setAutoRaise(True)
+        self.reset_btn.setToolTip("Reset row")
+        layout.addWidget(self.reset_btn, 0)
+
         self.remove_btn = QtWidgets.QToolButton(self)
         self.remove_btn.setObjectName("FindObjectsConditionRemoveBtn")
         self.remove_btn.setText("X")
@@ -323,6 +330,7 @@ class ConditionRow(QtWidgets.QFrame):
         self.property_chip_edit_btn.clicked.connect(lambda: self._edit_progressive_property())
         self.operator_chip_edit_btn.clicked.connect(lambda: self._edit_progressive_operator())
         self.row_edit_btn.clicked.connect(self._edit_progressive_completed_row)
+        self.reset_btn.clicked.connect(self.reset_row)
         self._configure_value_editor()
         self._apply_progressive_visibility()
         self._suppress_interaction_events = False
@@ -363,6 +371,52 @@ class ConditionRow(QtWidgets.QFrame):
         self._progressive_collapsed = False
         self.set_progressive_step(self._PROGRESSIVE_STEP_VALUE)
         self.focus_first_step()
+
+    def reset_row(self) -> None:
+        self._progressive_collapsed = False
+        self._has_user_interaction = False
+        self.set_value_invalid(False)
+        old_suppress = bool(self._suppress_interaction_events)
+        self._suppress_interaction_events = True
+        widgets = [
+            self.category_combo,
+            self.property_combo,
+            self.operator_combo,
+            self.value_input,
+            self.value_choice_combo,
+            self.value_enum_combo,
+            self.value_multi_picker,
+            self.value_bool_true_btn,
+            self.value_bool_false_btn,
+        ]
+        old_blocks = [w.signalsBlocked() for w in widgets]
+        for w in widgets:
+            w.blockSignals(True)
+        try:
+            idx = self.category_combo.findData(self._PROGRESSIVE_PLACEHOLDER_CATEGORY)
+            if idx >= 0:
+                self.category_combo.setCurrentIndex(idx)
+            self._reload_properties_for_category(self._PROGRESSIVE_PLACEHOLDER_CATEGORY, preserve_property_key="")
+            idx = self.property_combo.findData(self._PROGRESSIVE_PLACEHOLDER_PROPERTY)
+            if idx >= 0:
+                self.property_combo.setCurrentIndex(idx)
+            self._progressive_reset_operator = True
+            self._update_operator_items()
+            self.value_input.setText("")
+            if self.value_choice_combo.count() > 0:
+                self.value_choice_combo.setCurrentIndex(0)
+            self.value_enum_combo.set_options([("Choose value…", self._PROGRESSIVE_PLACEHOLDER_VALUE)], preserve_value="")
+            self.value_multi_picker.set_csv_text("")
+            self.value_bool_true_btn.setChecked(False)
+            self.value_bool_false_btn.setChecked(False)
+            self._progressive_step = self._PROGRESSIVE_STEP_ITEM
+            self._configure_value_editor()
+            self._apply_progressive_visibility()
+        finally:
+            for w, blocked in zip(widgets, old_blocks):
+                w.blockSignals(bool(blocked))
+            self._suppress_interaction_events = old_suppress
+        self.changed.emit()
 
     def _sync_item_chip(self) -> None:
         key = self.category_key()

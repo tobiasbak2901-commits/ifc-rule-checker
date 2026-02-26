@@ -3198,8 +3198,30 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_conditions_title.setObjectName("FindObjectsConditionListTitle")
         self.find_objects_conditions_hint = QtWidgets.QLabel("[Category] [Property] [Operation] [Value]", self.find_objects_conditions_header)
         self.find_objects_conditions_hint.setObjectName("FindObjectsConditionListHint")
+        self.find_objects_match_label = QtWidgets.QLabel("Match:", self.find_objects_conditions_header)
+        self.find_objects_match_label.setObjectName("FindObjectsMatchLabel")
+        self.find_objects_match_all_btn = QtWidgets.QToolButton(self.find_objects_conditions_header)
+        self.find_objects_match_all_btn.setObjectName("FindObjectsMatchToggle")
+        self.find_objects_match_all_btn.setText("ALL")
+        self.find_objects_match_all_btn.setCheckable(True)
+        self.find_objects_match_all_btn.setChecked(True)
+        self.find_objects_match_all_btn.setToolTip("All conditions must match")
+        self.find_objects_match_any_btn = QtWidgets.QToolButton(self.find_objects_conditions_header)
+        self.find_objects_match_any_btn.setObjectName("FindObjectsMatchToggle")
+        self.find_objects_match_any_btn.setText("ANY")
+        self.find_objects_match_any_btn.setCheckable(True)
+        self.find_objects_match_any_btn.setChecked(False)
+        self.find_objects_match_any_btn.setToolTip("Any condition may match")
+        self.find_objects_match_buttons = QtWidgets.QButtonGroup(self.find_objects_conditions_header)
+        self.find_objects_match_buttons.setExclusive(True)
+        self.find_objects_match_buttons.addButton(self.find_objects_match_all_btn)
+        self.find_objects_match_buttons.addButton(self.find_objects_match_any_btn)
         conditions_header_layout.addWidget(self.find_objects_conditions_title, 0)
         conditions_header_layout.addWidget(self.find_objects_conditions_hint, 0)
+        conditions_header_layout.addSpacing(10)
+        conditions_header_layout.addWidget(self.find_objects_match_label, 0)
+        conditions_header_layout.addWidget(self.find_objects_match_all_btn, 0)
+        conditions_header_layout.addWidget(self.find_objects_match_any_btn, 0)
         conditions_header_layout.addStretch(1)
         conditions_section.addWidget(self.find_objects_conditions_header, 0)
 
@@ -3232,6 +3254,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_add_group_btn.setToolTip("Add nested group")
         self.find_objects_add_condition_btn.setMinimumHeight(24)
         self.find_objects_add_group_btn.setMinimumHeight(24)
+        self.find_objects_add_group_btn.setVisible(False)
         conditions_actions.addWidget(self.find_objects_add_condition_btn, 0)
         conditions_actions.addWidget(self.find_objects_add_group_btn, 0)
         conditions_actions.addStretch(1)
@@ -4556,6 +4579,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_start_cta_btn.clicked.connect(self._on_find_objects_add_filter_btn_clicked)
         self.find_objects_add_condition_btn.clicked.connect(self._on_find_objects_add_condition_clicked)
         self.find_objects_add_group_btn.clicked.connect(self._on_find_objects_add_group_clicked)
+        self.find_objects_match_all_btn.toggled.connect(lambda checked: self._on_find_objects_global_match_toggled("and", checked))
+        self.find_objects_match_any_btn.toggled.connect(lambda checked: self._on_find_objects_global_match_toggled("or", checked))
         self.find_objects_add_filter_btn.clicked.connect(self._on_find_objects_add_filter_btn_clicked)
         self.find_objects_more_action_clear.triggered.connect(self._on_find_objects_clear_clicked)
         self.find_objects_more_action_select_all.triggered.connect(self._on_find_objects_select_all_clicked)
@@ -6503,6 +6528,27 @@ class MainWindow(QtWidgets.QMainWindow):
                 border-color: rgba(255, 46, 136, 112);
                 color: #FCE7F3;
             }}
+            QLabel#FindObjectsMatchLabel {{
+                color: #94A3B8;
+                font-size: 10px;
+                font-weight: 600;
+            }}
+            QToolButton#FindObjectsMatchToggle {{
+                background: transparent;
+                color: #94A3B8;
+                border: 1px solid rgba(148, 163, 184, 26);
+                border-radius: 6px;
+                padding: 0px 8px;
+                min-width: 34px;
+                min-height: 20px;
+                font-size: 9px;
+                font-weight: 600;
+            }}
+            QToolButton#FindObjectsMatchToggle:checked {{
+                background: rgba(255, 46, 136, 0.18);
+                border-color: rgba(255, 46, 136, 112);
+                color: #FCE7F3;
+            }}
             QScrollArea#FindObjectsGroupsScroll {{
                 background: transparent;
                 border: none;
@@ -6692,6 +6738,22 @@ class MainWindow(QtWidgets.QMainWindow):
                 font-weight: 700;
             }}
             QToolButton#FindObjectsConditionRowEditBtn:hover {{
+                background: rgba(148, 163, 184, 0.16);
+                color: #E2E8F0;
+            }}
+            QToolButton#FindObjectsConditionResetBtn {{
+                background: transparent;
+                color: #94A3B8;
+                border: none;
+                border-radius: 6px;
+                min-width: 18px;
+                min-height: 18px;
+                max-width: 18px;
+                max-height: 18px;
+                font-size: 12px;
+                font-weight: 700;
+            }}
+            QToolButton#FindObjectsConditionResetBtn:hover {{
                 background: rgba(148, 163, 184, 0.16);
                 color: #E2E8F0;
             }}
@@ -11706,6 +11768,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self._find_objects_last_touched_group_id = 0
         self._find_objects_panel_opened = False
         self._find_objects_has_run = False
+        self._find_objects_match_logic = "and"
+        if hasattr(self, "find_objects_match_all_btn") and hasattr(self, "find_objects_match_any_btn"):
+            self.find_objects_match_all_btn.blockSignals(True)
+            self.find_objects_match_any_btn.blockSignals(True)
+            self.find_objects_match_all_btn.setChecked(True)
+            self.find_objects_match_any_btn.setChecked(False)
+            self.find_objects_match_all_btn.blockSignals(False)
+            self.find_objects_match_any_btn.blockSignals(False)
         for widget in self.find_objects_groups_body.findChildren(QtWidgets.QWidget):
             if widget is self.find_objects_groups_body:
                 continue
@@ -11774,14 +11844,16 @@ class MainWindow(QtWidgets.QMainWindow):
         logic_and_btn.setObjectName("FindObjectsLogicToggle")
         logic_and_btn.setText("AND")
         logic_and_btn.setCheckable(True)
-        logic_and_btn.setChecked(True)
+        logic_and_btn.setChecked(str(getattr(self, "_find_objects_match_logic", "and") or "and").strip().lower() != "or")
         logic_and_btn.setMinimumHeight(20)
         logic_or_btn = QtWidgets.QToolButton(frame)
         logic_or_btn.setObjectName("FindObjectsLogicToggle")
         logic_or_btn.setText("OR")
         logic_or_btn.setCheckable(True)
-        logic_or_btn.setChecked(False)
+        logic_or_btn.setChecked(str(getattr(self, "_find_objects_match_logic", "and") or "and").strip().lower() == "or")
         logic_or_btn.setMinimumHeight(20)
+        logic_and_btn.setVisible(False)
+        logic_or_btn.setVisible(False)
         logic_buttons = QtWidgets.QButtonGroup(frame)
         logic_buttons.setExclusive(True)
         logic_buttons.addButton(logic_and_btn)
@@ -11797,6 +11869,7 @@ class MainWindow(QtWidgets.QMainWindow):
         add_group_btn.setText("+G")
         add_group_btn.setToolTip("Add nested group")
         add_group_btn.setAutoRaise(True)
+        add_group_btn.setVisible(False)
 
         remove_group_btn = QtWidgets.QToolButton(frame)
         remove_group_btn.setObjectName("FindObjectsGroupRemoveBtn")
@@ -11830,7 +11903,7 @@ class MainWindow(QtWidgets.QMainWindow):
             "parent_id": int(parent_id),
             "level": int(level),
             "frame": frame,
-            "logic": "and",
+            "logic": "or" if str(getattr(self, "_find_objects_match_logic", "and") or "and").strip().lower() == "or" else "and",
             "connector": connector,
             "logic_and_btn": logic_and_btn,
             "logic_or_btn": logic_or_btn,
@@ -11915,12 +11988,12 @@ class MainWindow(QtWidgets.QMainWindow):
         parent_group = self._find_objects_group_parent(group)
         if isinstance(connector, QtWidgets.QLabel):
             if level <= 0:
-                connector.setText("AND")
+                connector.setText(self._find_objects_global_match_label())
                 connector.setVisible(root_count > 1 and root_index > 1)
             else:
-                parent_logic = "AND"
+                parent_logic = self._find_objects_global_match_label()
                 if parent_group is not None:
-                    parent_logic = str(parent_group.get("logic") or "and").strip().upper() or "AND"
+                    parent_logic = self._find_objects_global_match_label()
                 connector.setText(parent_logic)
                 connector.setVisible(True)
         if isinstance(remove_btn, QtWidgets.QToolButton):
@@ -12066,18 +12139,51 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self._on_find_objects_condition_row_changed(group_id=int(group.get("id") or 0))
 
+    def _find_objects_global_match_label(self) -> str:
+        logic = str(getattr(self, "_find_objects_match_logic", "and") or "and").strip().lower()
+        return "OR" if logic == "or" else "AND"
+
+    def _set_find_objects_global_match_logic(self, logic: str, *, update_buttons: bool = True) -> None:
+        normalized = "or" if str(logic or "").strip().lower() == "or" else "and"
+        self._find_objects_match_logic = normalized
+        if update_buttons and hasattr(self, "find_objects_match_all_btn") and hasattr(self, "find_objects_match_any_btn"):
+            self.find_objects_match_all_btn.blockSignals(True)
+            self.find_objects_match_any_btn.blockSignals(True)
+            try:
+                self.find_objects_match_all_btn.setChecked(normalized != "or")
+                self.find_objects_match_any_btn.setChecked(normalized == "or")
+            finally:
+                self.find_objects_match_all_btn.blockSignals(False)
+                self.find_objects_match_any_btn.blockSignals(False)
+
+        for group in list(getattr(self, "_find_objects_groups", []) or []):
+            if not isinstance(group, dict):
+                continue
+            group["logic"] = normalized
+            and_btn = group.get("logic_and_btn")
+            or_btn = group.get("logic_or_btn")
+            if isinstance(and_btn, QtWidgets.QToolButton):
+                and_btn.setChecked(normalized != "or")
+            if isinstance(or_btn, QtWidgets.QToolButton):
+                or_btn.setChecked(normalized == "or")
+
+        self._refresh_find_objects_group_headers()
+        self._render_find_objects_filter_chips()
+        self._schedule_find_objects_quick_preview()
+
+    def _on_find_objects_global_match_toggled(self, logic: str, checked: bool) -> None:
+        if not checked:
+            return
+        self._set_find_objects_global_match_logic(logic)
+
     def _on_find_objects_group_logic_toggled(self, group_id: int, logic: str, checked: bool) -> None:
         if not checked:
             return
         group = self._find_objects_group_by_id(group_id)
         if group is None:
             return
-        normalized = str(logic or "").strip().lower()
-        group["logic"] = "or" if normalized == "or" else "and"
         self._find_objects_last_touched_group_id = int(group_id)
-        self._refresh_find_objects_group_headers()
-        self._render_find_objects_filter_chips()
-        self._schedule_find_objects_quick_preview()
+        self._set_find_objects_global_match_logic(logic, update_buttons=True)
 
     def _on_find_objects_condition_row_changed(self, group_id: int = 0) -> None:
         if int(group_id or 0) > 0:
