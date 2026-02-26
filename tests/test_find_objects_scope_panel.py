@@ -145,7 +145,7 @@ def test_find_objects_scope_changes_candidate_provider():
     assert "def _run_find_objects_quick_preview(self) -> None:" in source
     assert "def _update_find_objects_matches_preview(self, count: Optional[int], *, invalid: bool = False) -> None:" in source
     assert "def _find_objects_active_filter_chip_texts(self) -> List[str]:" in source
-    assert 'return "Add a condition or use Quick search."' in source
+    assert 'return "No objects match current filters."' in source
     assert 'return "No matches. Try changing operator, value, or scope."' in source
     assert 'more_chip = QtWidgets.QLabel(f"+{remaining} more")' in source
     assert "def _update_find_objects_find_all_state(self) -> None:" in source
@@ -310,3 +310,226 @@ def test_find_objects_condition_row_has_professional_builder_controls():
     assert "QComboBox#FindObjectsCategoryCombo QAbstractItemView[themeScope=\"app\"]" in dropdowns
     assert "QMenu#FindObjectsSuggestMenu[themeScope=\"app\"]" in dropdowns
     assert "QMenu#FindObjectsMoreMenu[themeScope=\"app\"]" in dropdowns
+
+
+def test_find_objects_scope_only_selection_yields_matches_and_enables_save():
+    """Any non-everywhere scope with no conditions/query must return candidates as
+    matches and allow saving a Search Set."""
+    source = Path("ui/main_window.py").read_text(encoding="utf-8")
+    # Any non-everywhere scope is an active filter in _find_objects_has_query_or_valid_filters
+    assert (
+        'if scope_key not in {"everywhere", ""}:' in source
+    ), "_find_objects_has_query_or_valid_filters must return True for any non-everywhere scope"
+    # Everywhere scope also enabled when model has elements
+    assert (
+        'if scope_key == "everywhere" and self.object_index.count > 0:' in source
+    ), "_find_objects_has_query_or_valid_filters must enable everywhere scope when model has elements"
+    # Scope-only branch in _run_find_objects_live_search returns candidates as matches
+    assert (
+        "# Scope-only: any scope (including everywhere) with candidates yields those" in source
+    ), "_run_find_objects_live_search must handle scope-only case for all scopes"
+    assert (
+        "self._find_objects_has_run = True" in source
+    ), "_run_find_objects_live_search must set has_run=True for scope-only results"
+    # Quick preview shows candidate count for scope-only (any scope)
+    assert (
+        "# Scope-only: preview candidate count for any scope (everywhere included)." in source
+    ), "_run_find_objects_quick_preview must show candidate count for all scopes"
+    # Filter chips refreshed on scope change so 'No active filters' disappears immediately
+    assert (
+        "self._render_find_objects_filter_chips()" in source
+    ), "_refresh_find_objects_for_scope_change must refresh filter chip display"
+    # Placeholder messages for scope states
+    assert (
+        'return "No elements found in selected scope."' in source
+    ), "_find_objects_empty_placeholder must have scope-specific empty message"
+    assert (
+        'return "No selection in Object Tree."' in source
+    ), "_find_objects_empty_placeholder must have no-selection message"
+    assert (
+        'return "No model loaded. Open an IFC file to search."' in source
+    ), "_find_objects_empty_placeholder must have no-model message"
+    # Save button is enabled by has_results derived from matches length
+    assert 'self.find_objects_save_set_btn.setEnabled(has_results)' in source
+    # Debug logging for candidates and matches
+    assert '[FindObjects DEBUG]' in source, "Debug logging must be present for candidates/matches count"
+
+
+def test_find_objects_scope_only_expand_selection_uses_node_element_ids():
+    """resolveScopeCandidates must resolve node payloads (elementIds from tree nodes)
+    to element IDs, so that system/file node selections expand to their descendants."""
+    source = Path("ui/main_window.py").read_text(encoding="utf-8")
+    # Node payload element IDs are used in resolution
+    assert 'node_payload.get("elementIds")' in source
+    assert 'node_payload.get("descendantElementIds")' in source
+    # setFindObjectsScopeSelectionNodes stores node payloads
+    assert "def setFindObjectsScopeSelectionNodes(self, nodes: Sequence[Mapping[str, object]], *, source: str = \"tree\") -> None:" in source
+    assert '"elementIds": list(element_ids)' in source
+    assert '"descendantElementIds": list(descendant_element_ids)' in source
+    # Tree panel sends elementIds and descendantElementIds in the payload
+    tree_source = Path("ui/panels/object_tree_panel.py").read_text(encoding="utf-8")
+    assert '"elementIds": list(node_element_ids)' in tree_source
+    assert '"descendantElementIds": list(descendant_element_ids)' in tree_source
+    assert "host.setFindObjectsScopeSelectionNodes(payload, source=\"tree\")" in tree_source
+
+
+def test_find_objects_filter_chips_are_removable():
+    """Active filters must render as compact chips each with an (x) remove button.
+    Removing a chip must update the underlying filter state and re-trigger search."""
+    source = Path("ui/main_window.py").read_text(encoding="utf-8")
+    # New chip-data methods exist
+    assert "def _find_objects_active_filter_chip_data(" in source
+    assert "def _collect_find_objects_condition_chip_data(" in source
+    # Chip frame and remove button are constructed per chip
+    assert 'chip_frame.setObjectName("FindObjectsFilterChipFrame")' in source
+    assert 'chip_label.setObjectName("FindObjectsFilterChipLabel")' in source
+    assert 'remove_btn.setObjectName("FindObjectsChipRemoveBtn")' in source
+    assert 'remove_btn.setText("×")' in source
+    assert "remove_btn.clicked.connect(remove_fn)" in source
+    # Quick-search chip: clear action wired via search_edit.clear
+    assert "self.find_objects_search_edit.clear" in source
+    # Scope chip: resets combo to everywhere index
+    assert "self.find_objects_scope_combo.setCurrentIndex(idx)" in source
+    # Condition chip: calls _remove_find_objects_condition_row with captured row
+    assert "self._remove_find_objects_condition_row(r)" in source
+    # Chip wrap visibility is driven by _render_find_objects_filter_chips itself
+    assert "self.find_objects_filter_chip_wrap.setVisible(True)" in source
+    assert "self.find_objects_filter_chip_wrap.setVisible(False)" in source
+    # QSS for chip frame and remove button
+    assert "QFrame#FindObjectsFilterChipFrame {" in source
+    assert "QToolButton#FindObjectsChipRemoveBtn {" in source
+    assert "QLabel#FindObjectsFilterChipLabel {" in source
+
+
+def test_find_objects_add_filter_editor_with_datatype_operators():
+    """'+ Add filter' button must exist in the header and ConditionRow must restrict
+    operator choices based on property datatype."""
+    main_src = Path("ui/main_window.py").read_text(encoding="utf-8")
+    condition_src = Path("ui/condition_row.py").read_text(encoding="utf-8")
+
+    # + Add filter button in the header
+    assert 'self.find_objects_add_filter_btn.setObjectName("FindObjectsAddFilterBtn")' in main_src
+    assert 'self.find_objects_add_filter_btn.setText("+ Add filter")' in main_src
+    assert "self.find_objects_add_filter_btn.clicked.connect(self._on_find_objects_add_filter_btn_clicked)" in main_src
+    assert "def _on_find_objects_add_filter_btn_clicked(self, checked: bool = False) -> None:" in main_src
+    assert "QToolButton#FindObjectsAddFilterBtn {" in main_src
+
+    # ConditionRow has kind-aware operator map
+    assert "_OPERATORS_FOR_KIND" in condition_src
+    # Number properties: comparison operators, no text operators
+    assert '"number":' in condition_src
+    assert '"greater_than"' in condition_src
+    assert '"less_than"' in condition_src
+    # String properties: text operators, no numeric comparisons
+    assert '"string":' in condition_src
+    assert '"contains"' in condition_src
+    assert '"starts_with"' in condition_src
+    # Boolean and enum are restricted
+    assert '"boolean":' in condition_src
+    assert '"enum":' in condition_src
+
+    # _update_operator_items method implements the filtering
+    assert "def _update_operator_items(self) -> None:" in condition_src
+    assert "self.operator_combo.blockSignals(True)" in condition_src
+    assert "self.operator_combo.clear()" in condition_src
+    assert "if key in allowed:" in condition_src
+    assert "self.operator_combo.blockSignals(False)" in condition_src
+
+    # _update_operator_items is called on property and category changes
+    assert "self._update_operator_items()" in condition_src
+
+
+def test_find_objects_options_menu_declutters_toggles():
+    """Prune/elements-only checkboxes must be moved out of the visible footer into
+    a compact ⋯ Options overflow menu; behavior (isChecked) must remain intact."""
+    source = Path("ui/main_window.py").read_text(encoding="utf-8")
+
+    # Checkboxes still exist for behavior-code compatibility
+    assert 'self.find_objects_prune_below_checkbox = QtWidgets.QCheckBox("Prune below result")' in source
+    assert 'self.find_objects_elements_only_checkbox = QtWidgets.QCheckBox("Elements only")' in source
+    # Checkboxes are hidden from the visible layout
+    assert "self.find_objects_prune_below_checkbox.setVisible(False)" in source
+    assert "self.find_objects_elements_only_checkbox.setVisible(False)" in source
+
+    # Options overflow button exists in the footer
+    assert 'self.find_objects_options_btn.setObjectName("FindObjectsOptionsBtn")' in source
+    assert 'self.find_objects_options_btn.setText("⋯ Options")' in source
+    assert "self.find_objects_options_btn.setPopupMode(QtWidgets.QToolButton.InstantPopup)" in source
+
+    # Options menu with two checkable actions
+    assert 'self.find_objects_options_menu.setObjectName("FindObjectsOptionsMenu")' in source
+    assert 'self.find_objects_options_action_prune = self.find_objects_options_menu.addAction("Prune below result")' in source
+    assert "self.find_objects_options_action_prune.setCheckable(True)" in source
+    assert "self.find_objects_options_action_elements_only = self.find_objects_options_menu.addAction(\"Elements only\")" in source
+    assert "self.find_objects_options_action_elements_only.setCheckable(True)" in source
+
+    # Actions synced to checkboxes so behavior code (isChecked) still works
+    assert "self.find_objects_options_action_prune.toggled.connect(self.find_objects_prune_below_checkbox.setChecked)" in source
+    assert "self.find_objects_options_action_elements_only.toggled.connect(self.find_objects_elements_only_checkbox.setChecked)" in source
+
+    # QSS for the options button
+    assert "QToolButton#FindObjectsOptionsBtn {" in source
+
+    # Theme overrides include the new menu name
+    dropdowns = Path("ui/theme_overrides/dropdowns.qss").read_text(encoding="utf-8")
+    assert 'QMenu#FindObjectsOptionsMenu[themeScope="app"]' in dropdowns
+
+
+def test_find_objects_results_polish_and_scope_header():
+    """Results section must show a compact 'Matches: X / Scope: <label>' header row
+    instead of the old stacked three-label layout.  Action buttons remain visible."""
+    source = Path("ui/main_window.py").read_text(encoding="utf-8")
+
+    # Legacy labels still exist (for behavior-code compatibility) but are hidden
+    assert 'self.find_objects_results_title = QtWidgets.QLabel("Results (0)")' in source
+    assert "self.find_objects_results_title.setVisible(False)" in source
+    assert 'self.find_objects_results_count_large = QtWidgets.QLabel("0 objects found")' in source
+    assert "self.find_objects_results_count_large.setVisible(False)" in source
+
+    # New scope label exists next to matches label in a horizontal results_header_row
+    assert 'self.find_objects_results_scope_label = QtWidgets.QLabel("Scope: Everywhere")' in source
+    assert 'self.find_objects_results_scope_label.setObjectName("FindObjectsResultsScopeLabel")' in source
+    assert "results_header_row.addWidget(self.find_objects_matches_label, 0)" in source
+    assert "results_header_row.addWidget(self.find_objects_results_scope_label, 0)" in source
+
+    # Scope label is updated when scope combo changes
+    assert 'self.find_objects_results_scope_label.setText(f"Scope: {self._find_objects_scope_label(self._find_objects_scope)}")' in source
+
+    # QSS for the scope label
+    assert "QLabel#FindObjectsResultsScopeLabel {" in source
+
+
+def test_find_objects_debounce_preview_and_smart_parsing():
+    """Match count must update automatically (250 ms debounce preview) on any input
+    change; explicit Find all populates the table.  Numeric filter values that start
+    with <, <=, >, >= must be auto-parsed into the correct operator + bare number."""
+    main_src = Path("ui/main_window.py").read_text(encoding="utf-8")
+    condition_src = Path("ui/condition_row.py").read_text(encoding="utf-8")
+
+    # Debounce interval is 250 ms for the preview path
+    assert "self._find_objects_debounce_timer.setInterval(250)" in main_src
+
+    # Condition row changes and logic toggles trigger preview, not live search
+    assert "def _on_find_objects_condition_row_changed" in main_src
+    # The method must call _schedule_find_objects_quick_preview (not live search)
+    cond_changed_block = main_src[
+        main_src.index("def _on_find_objects_condition_row_changed"):
+        main_src.index("def _on_find_objects_condition_row_changed") + 400
+    ]
+    assert "_schedule_find_objects_quick_preview()" in cond_changed_block
+
+    # Preview now handles conditions (not just search-only)
+    assert "def _run_find_objects_quick_preview(" in main_src
+    assert "self._find_objects_match_condition_groups(elem, groups)" in main_src
+
+    # _parse_numeric_shorthand static method exists in ConditionRow
+    assert "def _parse_numeric_shorthand(" in condition_src
+    assert '"<="' in condition_src or "'<='" in condition_src
+    assert '"less_than"' in condition_src
+    assert '">=", "greater_than"' in condition_src or "'>='," in condition_src
+    assert "float(rest)" in condition_src
+
+    # descriptor() applies the shorthand for numeric properties
+    assert "parsed = self._parse_numeric_shorthand(value)" in condition_src
+    assert 'kind == "number"' in condition_src
+    assert "op, value = parsed" in condition_src
