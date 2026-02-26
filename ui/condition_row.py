@@ -16,6 +16,7 @@ class ConditionRow(QtWidgets.QFrame):
     _PROGRESSIVE_STEP_VALUE = 4
     _PROGRESSIVE_PLACEHOLDER_CATEGORY = "__find_objects_choose_item__"
     _PROGRESSIVE_PLACEHOLDER_PROPERTY = "__find_objects_choose_property__"
+    _PROGRESSIVE_PLACEHOLDER_OPERATOR = "__find_objects_choose_operation__"
 
     _OPERATORS: tuple[tuple[str, str], ...] = (
         ("equals", "equals"),
@@ -95,6 +96,7 @@ class ConditionRow(QtWidgets.QFrame):
         self._default_category_key = ""
         self._progressive_enabled = True
         self._progressive_step = self._PROGRESSIVE_STEP_ITEM
+        self._progressive_reset_operator = False
         self._number_validator = QtGui.QDoubleValidator(self)
         self._number_validator.setNotation(QtGui.QDoubleValidator.StandardNotation)
         self._distinct_values_provider = distinct_values_provider
@@ -144,6 +146,24 @@ class ConditionRow(QtWidgets.QFrame):
         self.property_combo.setMinimumHeight(32)
         layout.addWidget(self.property_combo, 2)
 
+        self.property_chip_frame = QtWidgets.QFrame(self)
+        self.property_chip_frame.setObjectName("FindObjectsConditionStepChipFrame")
+        property_chip_layout = QtWidgets.QHBoxLayout(self.property_chip_frame)
+        property_chip_layout.setContentsMargins(8, 2, 8, 2)
+        property_chip_layout.setSpacing(6)
+        self.property_chip_label = QtWidgets.QLabel("", self.property_chip_frame)
+        self.property_chip_label.setObjectName("FindObjectsConditionStepChipLabel")
+        self.property_chip_label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        self.property_chip_edit_btn = QtWidgets.QToolButton(self.property_chip_frame)
+        self.property_chip_edit_btn.setObjectName("FindObjectsConditionStepChipEditBtn")
+        self.property_chip_edit_btn.setText("✎")
+        self.property_chip_edit_btn.setAutoRaise(True)
+        self.property_chip_edit_btn.setToolTip("Edit property")
+        property_chip_layout.addWidget(self.property_chip_label, 1)
+        property_chip_layout.addWidget(self.property_chip_edit_btn, 0, QtCore.Qt.AlignVCenter)
+        self.property_chip_frame.setVisible(False)
+        layout.addWidget(self.property_chip_frame, 2)
+
         self.operator_combo = QtWidgets.QComboBox(self)
         self.operator_combo.setObjectName("FindObjectsOperatorCombo")
         for label, value in self._OPERATORS:
@@ -152,6 +172,24 @@ class ConditionRow(QtWidgets.QFrame):
         self.operator_combo.view().setProperty("themeScope", "app")
         self.operator_combo.setMinimumHeight(32)
         layout.addWidget(self.operator_combo, 1)
+
+        self.operator_chip_frame = QtWidgets.QFrame(self)
+        self.operator_chip_frame.setObjectName("FindObjectsConditionStepChipFrame")
+        operator_chip_layout = QtWidgets.QHBoxLayout(self.operator_chip_frame)
+        operator_chip_layout.setContentsMargins(8, 2, 8, 2)
+        operator_chip_layout.setSpacing(6)
+        self.operator_chip_label = QtWidgets.QLabel("", self.operator_chip_frame)
+        self.operator_chip_label.setObjectName("FindObjectsConditionStepChipLabel")
+        self.operator_chip_label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        self.operator_chip_edit_btn = QtWidgets.QToolButton(self.operator_chip_frame)
+        self.operator_chip_edit_btn.setObjectName("FindObjectsConditionStepChipEditBtn")
+        self.operator_chip_edit_btn.setText("✎")
+        self.operator_chip_edit_btn.setAutoRaise(True)
+        self.operator_chip_edit_btn.setToolTip("Edit operation")
+        operator_chip_layout.addWidget(self.operator_chip_label, 1)
+        operator_chip_layout.addWidget(self.operator_chip_edit_btn, 0, QtCore.Qt.AlignVCenter)
+        self.operator_chip_frame.setVisible(False)
+        layout.addWidget(self.operator_chip_frame, 1)
 
         self.value_input = QtWidgets.QLineEdit(self)
         self.value_input.setObjectName("FindObjectsValueInput")
@@ -215,6 +253,7 @@ class ConditionRow(QtWidgets.QFrame):
         self._default_category_key = self.category_key()
         self._reload_properties_for_category(str(self.category_combo.currentData() or "").strip())
         self._default_property_key = self.property_key()
+        self._progressive_reset_operator = True
         self._update_operator_items()
         self._default_operator_key = self.operator_key()
 
@@ -227,6 +266,8 @@ class ConditionRow(QtWidgets.QFrame):
         self.value_multi_picker.valueChanged.connect(self._on_value_multi_picker_changed)
         self.remove_btn.clicked.connect(lambda: self.removeRequested.emit(self))
         self.item_chip_edit_btn.clicked.connect(lambda: self._edit_progressive_item())
+        self.property_chip_edit_btn.clicked.connect(lambda: self._edit_progressive_property())
+        self.operator_chip_edit_btn.clicked.connect(lambda: self._edit_progressive_operator())
         self._configure_value_editor()
         self._apply_progressive_visibility()
         self._suppress_interaction_events = False
@@ -254,6 +295,14 @@ class ConditionRow(QtWidgets.QFrame):
         self.set_progressive_step(self._PROGRESSIVE_STEP_ITEM)
         self.focus_first_step()
 
+    def _edit_progressive_property(self) -> None:
+        self.set_progressive_step(self._PROGRESSIVE_STEP_PROPERTY)
+        self.focus_first_step()
+
+    def _edit_progressive_operator(self) -> None:
+        self.set_progressive_step(self._PROGRESSIVE_STEP_OPERATION)
+        self.focus_first_step()
+
     def _sync_item_chip(self) -> None:
         key = self.category_key()
         if not key:
@@ -265,16 +314,46 @@ class ConditionRow(QtWidgets.QFrame):
         self.item_chip_label.setText(text)
         self.item_chip_frame.setToolTip(text)
 
+    def _sync_property_chip(self) -> None:
+        prop_key = self.property_key()
+        if not prop_key:
+            self.property_chip_label.setText("")
+            self.property_chip_frame.setToolTip("")
+            return
+        label = str(self.property_combo.currentText() or "").strip()
+        if not label:
+            label = prop_key.replace("_", " ").title()
+        text = f"Property: {label}"
+        self.property_chip_label.setText(text)
+        self.property_chip_frame.setToolTip(text)
+
+    def _sync_operator_chip(self) -> None:
+        op_key = self.operator_key()
+        if not op_key:
+            self.operator_chip_label.setText("")
+            self.operator_chip_frame.setToolTip("")
+            return
+        label = str(self.operator_combo.currentText() or "").strip()
+        if not label:
+            label = op_key.replace("_", " ")
+        text = f"Operation: {label}"
+        self.operator_chip_label.setText(text)
+        self.operator_chip_frame.setToolTip(text)
+
     def _apply_progressive_visibility(self) -> None:
         if not self._progressive_enabled:
             return
         step = int(self._progressive_step or self._PROGRESSIVE_STEP_ITEM)
         self._sync_item_chip()
+        self._sync_property_chip()
+        self._sync_operator_chip()
         self.category_combo.setVisible(step == self._PROGRESSIVE_STEP_ITEM)
         self.item_chip_frame.setVisible(step >= self._PROGRESSIVE_STEP_PROPERTY and bool(self.category_key()))
         self.property_combo.setVisible(step == self._PROGRESSIVE_STEP_PROPERTY)
-        self.operator_combo.setVisible(False)
-        self.value_wrap.setVisible(False)
+        self.property_chip_frame.setVisible(step >= self._PROGRESSIVE_STEP_OPERATION and bool(self.property_key()))
+        self.operator_combo.setVisible(step == self._PROGRESSIVE_STEP_OPERATION)
+        self.operator_chip_frame.setVisible(step >= self._PROGRESSIVE_STEP_VALUE and bool(self.operator_key()))
+        self.value_wrap.setVisible(step == self._PROGRESSIVE_STEP_VALUE)
         self.settings_btn.setVisible(False)
 
     def _normalize_property_options(
@@ -360,14 +439,19 @@ class ConditionRow(QtWidgets.QFrame):
         current_op = self.operator_key()
         self.operator_combo.blockSignals(True)
         self.operator_combo.clear()
+        self.operator_combo.addItem("Choose operation…", self._PROGRESSIVE_PLACEHOLDER_OPERATOR)
         for label, key in self._OPERATORS:
             if key in allowed:
                 self.operator_combo.addItem(label, key)
-        idx = self.operator_combo.findData(current_op)
-        if idx >= 0:
-            self.operator_combo.setCurrentIndex(idx)
-        elif self.operator_combo.count() > 0:
+        if self._progressive_reset_operator:
+            self._progressive_reset_operator = False
             self.operator_combo.setCurrentIndex(0)
+        else:
+            idx = self.operator_combo.findData(current_op)
+            if idx >= 0:
+                self.operator_combo.setCurrentIndex(idx)
+            elif self.operator_combo.count() > 0:
+                self.operator_combo.setCurrentIndex(0)
         self.operator_combo.blockSignals(False)
 
     def _mark_user_interaction(self) -> None:
@@ -425,14 +509,24 @@ class ConditionRow(QtWidgets.QFrame):
 
     def _on_property_changed(self, _index: int) -> None:
         self._mark_user_interaction()
+        if self._progressive_enabled:
+            self._progressive_reset_operator = True
         self._update_operator_items()
         self._configure_value_editor()
+        if self._progressive_enabled and self._progressive_step == self._PROGRESSIVE_STEP_PROPERTY and self.property_key():
+            self.set_progressive_step(self._PROGRESSIVE_STEP_OPERATION)
+            self.focus_first_step()
         self.changed.emit()
 
     def _on_property_text_changed(self, _text: str) -> None:
         self._mark_user_interaction()
+        if self._progressive_enabled:
+            self._progressive_reset_operator = True
         self._update_operator_items()
         self._configure_value_editor()
+        if self._progressive_enabled and self._progressive_step == self._PROGRESSIVE_STEP_PROPERTY and self.property_key():
+            self.set_progressive_step(self._PROGRESSIVE_STEP_OPERATION)
+            self.focus_first_step()
         self.changed.emit()
 
     def _on_value_text_changed(self, _text: str) -> None:
@@ -578,6 +672,9 @@ class ConditionRow(QtWidgets.QFrame):
     def _on_operator_changed(self, _index: int) -> None:
         self._mark_user_interaction()
         self._configure_value_editor()
+        if self._progressive_enabled and self._progressive_step == self._PROGRESSIVE_STEP_OPERATION and self.operator_key():
+            self.set_progressive_step(self._PROGRESSIVE_STEP_VALUE)
+            self.focus_first_step()
         self.changed.emit()
 
     def property_key(self) -> str:
@@ -605,7 +702,10 @@ class ConditionRow(QtWidgets.QFrame):
         return "item"
 
     def operator_key(self) -> str:
-        return str(self.operator_combo.currentData() or "").strip()
+        current = str(self.operator_combo.currentData() or "").strip()
+        if current == self._PROGRESSIVE_PLACEHOLDER_OPERATOR:
+            return ""
+        return current
 
     def value_text(self) -> str:
         if self.value_stack.currentWidget() is self.value_choice_combo:
