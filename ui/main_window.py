@@ -11028,6 +11028,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_advanced_frame.setVisible(enabled)
         self.find_objects_filter_chip_wrap.setVisible(enabled)
         self.find_objects_advanced_toggle_btn.setArrowType(QtCore.Qt.DownArrow if enabled else QtCore.Qt.RightArrow)
+        if enabled:
+            self._render_find_objects_filter_chips()
 
     def _on_find_objects_advanced_toggled(self, checked: bool) -> None:
         self._set_find_objects_advanced_visible(bool(checked))
@@ -11036,6 +11038,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_find_objects_scope_selection_ui()
         self._update_find_objects_scope_count()
         self._update_find_objects_find_all_state()
+        self._render_find_objects_filter_chips()
         self._schedule_find_objects_live_search(immediate=True)
 
     def _refresh_find_objects_for_active_scope(self, scope_key: str) -> None:
@@ -11341,7 +11344,16 @@ class MainWindow(QtWidgets.QMainWindow):
         query = str(self.find_objects_search_edit.text() or "").strip()
         has_conditions = bool(self._find_objects_active_condition_groups())
         if not query and not has_conditions:
-            return "Add a condition or use Quick search."
+            if self._find_objects_scope_uses_current_selection():
+                if not self._find_objects_scope_has_selection():
+                    return "No selection in Object Tree."
+                return "No elements found in selected scope."
+            scope_key = str(self._find_objects_scope or "").strip().lower()
+            if scope_key not in {"everywhere", ""}:
+                return "No elements found in selected scope."
+            if self.object_index.count == 0:
+                return "No model loaded. Open an IFC file to search."
+            return "No objects match current filters."
         return "No matches. Try changing operator, value, or scope."
 
     def _update_find_objects_matches_preview(self, count: Optional[int], *, invalid: bool = False) -> None:
@@ -11369,6 +11381,15 @@ class MainWindow(QtWidgets.QMainWindow):
             if row.has_missing_required_value():
                 continue
             return True
+        # Any non-everywhere scope is itself an active filter — it restricts candidates
+        # to a subset (selected nodes, search set, etc.) without requiring extra conditions.
+        scope_key = str(self._find_objects_scope or "").strip().lower()
+        if scope_key not in {"everywhere", ""}:
+            return True
+        # Everywhere scope: allow "Find all" as a list-all operation when the model has
+        # indexed elements (scope_ready is always True for everywhere).
+        if scope_key == "everywhere" and self.object_index.count > 0:
+            return True
         return False
 
     def _update_find_objects_find_all_state(self) -> None:
@@ -11379,9 +11400,20 @@ class MainWindow(QtWidgets.QMainWindow):
             self.find_objects_find_btn.setEnabled(enabled)
         if hasattr(self, "find_objects_find_disabled_hint"):
             if (not scope_ready) and self._find_objects_scope_uses_current_selection():
+                # Waiting for tree selection — scope chip already signals the state.
                 self.find_objects_find_disabled_hint.setVisible(False)
+            elif not enabled:
+                # Derive a context-specific hint so the user knows what to do.
+                scope_key = str(self._find_objects_scope or "").strip().lower()
+                if scope_key in {"everywhere", ""} and self.object_index.count == 0:
+                    self.find_objects_find_disabled_hint.setText("Load a model to enable Find all.")
+                else:
+                    self.find_objects_find_disabled_hint.setText(
+                        "Select scope nodes or add a condition to enable Find all."
+                    )
+                self.find_objects_find_disabled_hint.setVisible(True)
             else:
-                self.find_objects_find_disabled_hint.setVisible(not enabled)
+                self.find_objects_find_disabled_hint.setVisible(False)
 
     def _find_objects_condition_rows(self) -> List[ConditionRow]:
         rows: List[ConditionRow] = []
@@ -12494,7 +12526,9 @@ class MainWindow(QtWidgets.QMainWindow):
         groups = self._find_objects_active_condition_groups()
         if not query:
             if not groups:
-                self._update_find_objects_matches_preview(0)
+                # Scope-only: preview candidate count for any scope (everywhere included).
+                candidates = self._find_objects_candidate_ids()
+                self._update_find_objects_matches_preview(len(candidates))
             return
         # Keep pause-preview lightweight: only preview simple quick-search scans.
         if groups:
@@ -12552,6 +12586,16 @@ class MainWindow(QtWidgets.QMainWindow):
         has_query = bool(tokens)
         has_conditions = bool(groups)
         if not has_query and not has_conditions:
+            # Scope-only: any scope (including everywhere) with candidates yields those
+            # candidates directly as matches — no extra filter is needed.
+            candidates = self._find_objects_candidate_ids()
+            print(f"[FindObjects DEBUG] scope-only — scope: {self._find_objects_scope!r}, candidates: {len(candidates)}, matches: {len(candidates)}")
+            if candidates:
+                self._find_objects_has_run = True
+                self._find_objects_last_results = list(candidates)
+                self._update_find_objects_matches_preview(len(candidates))
+                self._render_find_objects_results(candidates, placeholder=self._find_objects_empty_placeholder())
+                return
             self._find_objects_has_run = False
             self._find_objects_last_results = []
             self._update_find_objects_matches_preview(0)
@@ -12559,6 +12603,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self._find_objects_has_run = bool(has_query or has_conditions)
         candidates = self._find_objects_candidate_ids()
+        print(f"[FindObjects DEBUG] candidates: {len(candidates)}, scope: {self._find_objects_scope!r}")
         matches: List[str] = []
         for guid in candidates:
             elem = self.state.ifc_index.get(guid)
@@ -12569,6 +12614,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if has_conditions and not self._find_objects_match_condition_groups(elem, groups):
                 continue
             matches.append(guid)
+        print(f"[FindObjects DEBUG] matches: {len(matches)}")
         self._find_objects_last_results = list(matches)
         self._update_find_objects_matches_preview(len(matches))
         self._render_find_objects_results(matches, placeholder=self._find_objects_empty_placeholder())

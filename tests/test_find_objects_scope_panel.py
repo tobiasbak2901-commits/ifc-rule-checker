@@ -145,7 +145,7 @@ def test_find_objects_scope_changes_candidate_provider():
     assert "def _run_find_objects_quick_preview(self) -> None:" in source
     assert "def _update_find_objects_matches_preview(self, count: Optional[int], *, invalid: bool = False) -> None:" in source
     assert "def _find_objects_active_filter_chip_texts(self) -> List[str]:" in source
-    assert 'return "Add a condition or use Quick search."' in source
+    assert 'return "No objects match current filters."' in source
     assert 'return "No matches. Try changing operator, value, or scope."' in source
     assert 'more_chip = QtWidgets.QLabel(f"+{remaining} more")' in source
     assert "def _update_find_objects_find_all_state(self) -> None:" in source
@@ -310,3 +310,64 @@ def test_find_objects_condition_row_has_professional_builder_controls():
     assert "QComboBox#FindObjectsCategoryCombo QAbstractItemView[themeScope=\"app\"]" in dropdowns
     assert "QMenu#FindObjectsSuggestMenu[themeScope=\"app\"]" in dropdowns
     assert "QMenu#FindObjectsMoreMenu[themeScope=\"app\"]" in dropdowns
+
+
+def test_find_objects_scope_only_selection_yields_matches_and_enables_save():
+    """Any non-everywhere scope with no conditions/query must return candidates as
+    matches and allow saving a Search Set."""
+    source = Path("ui/main_window.py").read_text(encoding="utf-8")
+    # Any non-everywhere scope is an active filter in _find_objects_has_query_or_valid_filters
+    assert (
+        'if scope_key not in {"everywhere", ""}:' in source
+    ), "_find_objects_has_query_or_valid_filters must return True for any non-everywhere scope"
+    # Everywhere scope also enabled when model has elements
+    assert (
+        'if scope_key == "everywhere" and self.object_index.count > 0:' in source
+    ), "_find_objects_has_query_or_valid_filters must enable everywhere scope when model has elements"
+    # Scope-only branch in _run_find_objects_live_search returns candidates as matches
+    assert (
+        "# Scope-only: any scope (including everywhere) with candidates yields those" in source
+    ), "_run_find_objects_live_search must handle scope-only case for all scopes"
+    assert (
+        "self._find_objects_has_run = True" in source
+    ), "_run_find_objects_live_search must set has_run=True for scope-only results"
+    # Quick preview shows candidate count for scope-only (any scope)
+    assert (
+        "# Scope-only: preview candidate count for any scope (everywhere included)." in source
+    ), "_run_find_objects_quick_preview must show candidate count for all scopes"
+    # Filter chips refreshed on scope change so 'No active filters' disappears immediately
+    assert (
+        "self._render_find_objects_filter_chips()" in source
+    ), "_refresh_find_objects_for_scope_change must refresh filter chip display"
+    # Placeholder messages for scope states
+    assert (
+        'return "No elements found in selected scope."' in source
+    ), "_find_objects_empty_placeholder must have scope-specific empty message"
+    assert (
+        'return "No selection in Object Tree."' in source
+    ), "_find_objects_empty_placeholder must have no-selection message"
+    assert (
+        'return "No model loaded. Open an IFC file to search."' in source
+    ), "_find_objects_empty_placeholder must have no-model message"
+    # Save button is enabled by has_results derived from matches length
+    assert 'self.find_objects_save_set_btn.setEnabled(has_results)' in source
+    # Debug logging for candidates and matches
+    assert '[FindObjects DEBUG]' in source, "Debug logging must be present for candidates/matches count"
+
+
+def test_find_objects_scope_only_expand_selection_uses_node_element_ids():
+    """resolveScopeCandidates must resolve node payloads (elementIds from tree nodes)
+    to element IDs, so that system/file node selections expand to their descendants."""
+    source = Path("ui/main_window.py").read_text(encoding="utf-8")
+    # Node payload element IDs are used in resolution
+    assert 'node_payload.get("elementIds")' in source
+    assert 'node_payload.get("descendantElementIds")' in source
+    # setFindObjectsScopeSelectionNodes stores node payloads
+    assert "def setFindObjectsScopeSelectionNodes(self, nodes: Sequence[Mapping[str, object]], *, source: str = \"tree\") -> None:" in source
+    assert '"elementIds": list(element_ids)' in source
+    assert '"descendantElementIds": list(descendant_element_ids)' in source
+    # Tree panel sends elementIds and descendantElementIds in the payload
+    tree_source = Path("ui/panels/object_tree_panel.py").read_text(encoding="utf-8")
+    assert '"elementIds": list(node_element_ids)' in tree_source
+    assert '"descendantElementIds": list(descendant_element_ids)' in tree_source
+    assert "host.setFindObjectsScopeSelectionNodes(payload, source=\"tree\")" in tree_source
