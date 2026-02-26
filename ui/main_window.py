@@ -6621,6 +6621,31 @@ class MainWindow(QtWidgets.QMainWindow):
                 font-size: 11px;
                 padding: 2px 4px;
             }}
+            QFrame#FindObjectsFilterChipFrame {{
+                background: rgba(30, 41, 59, 0.75);
+                border: 1px solid rgba(148, 163, 184, 55);
+                border-radius: 9px;
+            }}
+            QLabel#FindObjectsFilterChipLabel {{
+                color: #E2E8F0;
+                font-size: 11px;
+                background: transparent;
+                border: none;
+            }}
+            QToolButton#FindObjectsChipRemoveBtn {{
+                color: rgba(148, 163, 184, 0.7);
+                background: transparent;
+                border: none;
+                border-radius: 7px;
+                font-size: 11px;
+                min-width: 14px;
+                max-width: 14px;
+                padding: 0px;
+            }}
+            QToolButton#FindObjectsChipRemoveBtn:hover {{
+                color: #F87171;
+                background: rgba(248, 113, 113, 0.12);
+            }}
             QCheckBox#FindObjectsOptionCheck {{
                 color: #CBD5E1;
                 spacing: 6px;
@@ -11027,10 +11052,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def _set_find_objects_advanced_visible(self, visible: bool) -> None:
         enabled = bool(visible)
         self.find_objects_advanced_frame.setVisible(enabled)
-        self.find_objects_filter_chip_wrap.setVisible(enabled)
         self.find_objects_advanced_toggle_btn.setArrowType(QtCore.Qt.DownArrow if enabled else QtCore.Qt.RightArrow)
-        if enabled:
-            self._render_find_objects_filter_chips()
+        self._render_find_objects_filter_chips()
 
     def _on_find_objects_advanced_toggled(self, checked: bool) -> None:
         self._set_find_objects_advanced_visible(bool(checked))
@@ -11878,29 +11901,44 @@ class MainWindow(QtWidgets.QMainWindow):
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
-        chip_texts = self._find_objects_active_filter_chip_texts()
+        chip_data = self._find_objects_active_filter_chip_data()
+        chip_texts = [text for text, _ in chip_data]
         if not chip_texts:
-            empty = QtWidgets.QLabel("No active filters")
-            empty.setObjectName("SecondaryText")
-            layout.addWidget(empty, 0, 0)
+            self.find_objects_filter_chip_wrap.setVisible(False)
             return
         max_rows = 2
         max_per_row = 4
         max_visible = max_rows * max_per_row
-        visible = chip_texts[:max_visible]
-        for idx, text in enumerate(visible):
+        visible_data = chip_data[:max_visible]
+        for idx, (text, remove_fn) in enumerate(visible_data):
             row = idx // max_per_row
             col = idx % max_per_row
-            chip = QtWidgets.QLabel(text)
-            chip.setObjectName("FindObjectsFilterChip")
-            layout.addWidget(chip, row, col)
-        remaining = len(chip_texts) - len(visible)
+            chip_frame = QtWidgets.QFrame()
+            chip_frame.setObjectName("FindObjectsFilterChipFrame")
+            chip_inner = QtWidgets.QHBoxLayout(chip_frame)
+            chip_inner.setContentsMargins(6, 2, 2, 2)
+            chip_inner.setSpacing(3)
+            chip_label = QtWidgets.QLabel(text)
+            chip_label.setObjectName("FindObjectsFilterChipLabel")
+            chip_inner.addWidget(chip_label, 0)
+            remove_btn = QtWidgets.QToolButton(chip_frame)
+            remove_btn.setObjectName("FindObjectsChipRemoveBtn")
+            remove_btn.setText("×")
+            remove_btn.setAutoRaise(True)
+            remove_btn.setCursor(QtCore.Qt.PointingHandCursor)
+            remove_btn.setToolTip(f"Remove filter: {text}")
+            if remove_fn is not None:
+                remove_btn.clicked.connect(remove_fn)
+            chip_inner.addWidget(remove_btn, 0)
+            layout.addWidget(chip_frame, row, col)
+        remaining = len(chip_data) - len(visible_data)
         if remaining > 0:
             more_chip = QtWidgets.QLabel(f"+{remaining} more")
             more_chip.setObjectName("FindObjectsFilterChipMore")
             row = max_rows - 1
             col = max_per_row
             layout.addWidget(more_chip, row, col)
+        self.find_objects_filter_chip_wrap.setVisible(True)
 
     def _find_objects_active_filter_chip_texts(self) -> List[str]:
         chips: List[str] = []
@@ -11929,6 +11967,44 @@ class MainWindow(QtWidgets.QMainWindow):
             if isinstance(entry, Mapping):
                 push_group(entry, [int(group_index)])
         return chips
+
+    def _find_objects_active_filter_chip_data(
+        self,
+    ) -> List[Tuple[str, Optional[Callable[[], None]]]]:
+        """Return (label, remove_fn) pairs for all active filters."""
+        chips: List[Tuple[str, Optional[Callable[[], None]]]] = []
+        query = str(self.find_objects_search_edit.text() or "").strip()
+        if query:
+            chips.append((f"Search: {query}", self.find_objects_search_edit.clear))
+        scope_key = str(self.find_objects_scope_combo.currentData() or "everywhere")
+        if scope_key != "everywhere":
+            everywhere_index = self.find_objects_scope_combo.findData("everywhere")
+            chips.append((
+                f"Scope: {self._find_objects_scope_label(scope_key)}",
+                lambda idx=everywhere_index: self.find_objects_scope_combo.setCurrentIndex(idx) if idx >= 0 else None,
+            ))
+        for group_index, root_group in enumerate(self._find_objects_root_groups(), start=1):
+            self._collect_find_objects_condition_chip_data(chips, root_group, [group_index])
+        return chips
+
+    def _collect_find_objects_condition_chip_data(
+        self,
+        chips: List[Tuple[str, Optional[Callable[[], None]]]],
+        group: Dict[str, object],
+        path: List[int],
+    ) -> None:
+        path_label = "G" + ".".join(str(v) for v in path)
+        for row in list(group.get("rows") or []):
+            if not isinstance(row, ConditionRow) or not row.is_active():
+                continue
+            desc = row.descriptor()
+            prop = str(desc.get("property") or "").replace("_", " ").title()
+            op = str(desc.get("operator") or "").replace("_", " ")
+            value = str(desc.get("value") or "")
+            text = f"{prop} {op}" if op == "exists" else f"{prop} {op} {value}".strip()
+            chips.append((f"{path_label}: {text}", lambda r=row: self._remove_find_objects_condition_row(r)))
+        for child_index, child in enumerate(self._find_objects_group_children(group), start=1):
+            self._collect_find_objects_condition_chip_data(chips, child, [*path, child_index])
 
     @staticmethod
     def _find_objects_extract_system_values(elem: Element) -> List[str]:

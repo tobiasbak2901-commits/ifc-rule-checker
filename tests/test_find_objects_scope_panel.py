@@ -371,3 +371,31 @@ def test_find_objects_scope_only_expand_selection_uses_node_element_ids():
     assert '"elementIds": list(node_element_ids)' in tree_source
     assert '"descendantElementIds": list(descendant_element_ids)' in tree_source
     assert "host.setFindObjectsScopeSelectionNodes(payload, source=\"tree\")" in tree_source
+
+
+def test_find_objects_filter_chips_are_removable():
+    """Active filters must render as compact chips each with an (x) remove button.
+    Removing a chip must update the underlying filter state and re-trigger search."""
+    source = Path("ui/main_window.py").read_text(encoding="utf-8")
+    # New chip-data methods exist
+    assert "def _find_objects_active_filter_chip_data(" in source
+    assert "def _collect_find_objects_condition_chip_data(" in source
+    # Chip frame and remove button are constructed per chip
+    assert 'chip_frame.setObjectName("FindObjectsFilterChipFrame")' in source
+    assert 'chip_label.setObjectName("FindObjectsFilterChipLabel")' in source
+    assert 'remove_btn.setObjectName("FindObjectsChipRemoveBtn")' in source
+    assert 'remove_btn.setText("×")' in source
+    assert "remove_btn.clicked.connect(remove_fn)" in source
+    # Quick-search chip: clear action wired via search_edit.clear
+    assert "self.find_objects_search_edit.clear" in source
+    # Scope chip: resets combo to everywhere index
+    assert "self.find_objects_scope_combo.setCurrentIndex(idx)" in source
+    # Condition chip: calls _remove_find_objects_condition_row with captured row
+    assert "self._remove_find_objects_condition_row(r)" in source
+    # Chip wrap visibility is driven by _render_find_objects_filter_chips itself
+    assert "self.find_objects_filter_chip_wrap.setVisible(True)" in source
+    assert "self.find_objects_filter_chip_wrap.setVisible(False)" in source
+    # QSS for chip frame and remove button
+    assert "QFrame#FindObjectsFilterChipFrame {" in source
+    assert "QToolButton#FindObjectsChipRemoveBtn {" in source
+    assert "QLabel#FindObjectsFilterChipLabel {" in source
