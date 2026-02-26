@@ -1,4 +1,4 @@
-# IFC Rule Checker
+# Ponker Resolve
 
 A desktop application for IFC model analysis, clash detection, and rule-based issue management.
 
