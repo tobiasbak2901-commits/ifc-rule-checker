@@ -6703,6 +6703,29 @@ class MainWindow(QtWidgets.QMainWindow):
                 background: transparent;
                 border: none;
             }}
+            QFrame#FindObjectsConditionStepChipFrame {{
+                background: rgba(30, 41, 59, 0.75);
+                border: 1px solid rgba(148, 163, 184, 55);
+                border-radius: 9px;
+            }}
+            QLabel#FindObjectsConditionStepChipLabel {{
+                color: #E2E8F0;
+                font-size: 11px;
+                background: transparent;
+                border: none;
+            }}
+            QToolButton#FindObjectsConditionStepChipEditBtn {{
+                color: rgba(148, 163, 184, 0.8);
+                background: transparent;
+                border: none;
+                font-size: 11px;
+                min-width: 14px;
+                max-width: 14px;
+                padding: 0px;
+            }}
+            QToolButton#FindObjectsConditionStepChipEditBtn:hover {{
+                color: #F1F5F9;
+            }}
             QToolButton#FindObjectsChipRemoveBtn {{
                 color: rgba(148, 163, 184, 0.7);
                 background: transparent;

@@ -14,6 +14,8 @@ class ConditionRow(QtWidgets.QFrame):
     _PROGRESSIVE_STEP_PROPERTY = 2
     _PROGRESSIVE_STEP_OPERATION = 3
     _PROGRESSIVE_STEP_VALUE = 4
+    _PROGRESSIVE_PLACEHOLDER_CATEGORY = "__find_objects_choose_item__"
+    _PROGRESSIVE_PLACEHOLDER_PROPERTY = "__find_objects_choose_property__"
 
     _OPERATORS: tuple[tuple[str, str], ...] = (
         ("equals", "equals"),
@@ -112,6 +114,24 @@ class ConditionRow(QtWidgets.QFrame):
         self.category_combo.setMinimumWidth(96)
         layout.addWidget(self.category_combo, 1)
 
+        self.item_chip_frame = QtWidgets.QFrame(self)
+        self.item_chip_frame.setObjectName("FindObjectsConditionStepChipFrame")
+        item_chip_layout = QtWidgets.QHBoxLayout(self.item_chip_frame)
+        item_chip_layout.setContentsMargins(8, 2, 8, 2)
+        item_chip_layout.setSpacing(6)
+        self.item_chip_label = QtWidgets.QLabel("", self.item_chip_frame)
+        self.item_chip_label.setObjectName("FindObjectsConditionStepChipLabel")
+        self.item_chip_label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        self.item_chip_edit_btn = QtWidgets.QToolButton(self.item_chip_frame)
+        self.item_chip_edit_btn.setObjectName("FindObjectsConditionStepChipEditBtn")
+        self.item_chip_edit_btn.setText("✎")
+        self.item_chip_edit_btn.setAutoRaise(True)
+        self.item_chip_edit_btn.setToolTip("Edit item")
+        item_chip_layout.addWidget(self.item_chip_label, 1)
+        item_chip_layout.addWidget(self.item_chip_edit_btn, 0, QtCore.Qt.AlignVCenter)
+        self.item_chip_frame.setVisible(False)
+        layout.addWidget(self.item_chip_frame, 1)
+
         self.property_combo = SearchableDropdown(self)
         self.property_combo.setObjectName("FindObjectsPropertyCombo")
         self._property_catalog = self._normalize_property_options(property_options)
@@ -192,11 +212,11 @@ class ConditionRow(QtWidgets.QFrame):
         self.remove_btn.setMinimumWidth(22)
         layout.addWidget(self.remove_btn, 0)
 
-        self._default_category_key = str(self.category_combo.itemData(0) or "").strip()
-        self._reload_properties_for_category(self._default_category_key)
-        self._default_property_key = str(self.property_combo.itemData(0) or "").strip()
+        self._default_category_key = self.category_key()
+        self._reload_properties_for_category(str(self.category_combo.currentData() or "").strip())
+        self._default_property_key = self.property_key()
         self._update_operator_items()
-        self._default_operator_key = str(self.operator_combo.itemData(0) or "").strip()
+        self._default_operator_key = self.operator_key()
 
         self.category_combo.currentIndexChanged.connect(self._on_category_changed)
         self.property_combo.currentIndexChanged.connect(self._on_property_changed)
@@ -206,6 +226,7 @@ class ConditionRow(QtWidgets.QFrame):
         self.value_choice_combo.currentIndexChanged.connect(self._on_value_choice_changed)
         self.value_multi_picker.valueChanged.connect(self._on_value_multi_picker_changed)
         self.remove_btn.clicked.connect(lambda: self.removeRequested.emit(self))
+        self.item_chip_edit_btn.clicked.connect(lambda: self._edit_progressive_item())
         self._configure_value_editor()
         self._apply_progressive_visibility()
         self._suppress_interaction_events = False
@@ -229,12 +250,29 @@ class ConditionRow(QtWidgets.QFrame):
         self._progressive_step = max(self._PROGRESSIVE_STEP_ITEM, min(self._PROGRESSIVE_STEP_VALUE, normalized))
         self._apply_progressive_visibility()
 
+    def _edit_progressive_item(self) -> None:
+        self.set_progressive_step(self._PROGRESSIVE_STEP_ITEM)
+        self.focus_first_step()
+
+    def _sync_item_chip(self) -> None:
+        key = self.category_key()
+        if not key:
+            self.item_chip_label.setText("")
+            self.item_chip_frame.setToolTip("")
+            return
+        label = str(self._CATEGORY_LABELS.get(key) or key.title()).strip()
+        text = f"Item: {label}"
+        self.item_chip_label.setText(text)
+        self.item_chip_frame.setToolTip(text)
+
     def _apply_progressive_visibility(self) -> None:
         if not self._progressive_enabled:
             return
         step = int(self._progressive_step or self._PROGRESSIVE_STEP_ITEM)
+        self._sync_item_chip()
         self.category_combo.setVisible(step == self._PROGRESSIVE_STEP_ITEM)
-        self.property_combo.setVisible(False)
+        self.item_chip_frame.setVisible(step >= self._PROGRESSIVE_STEP_PROPERTY and bool(self.category_key()))
+        self.property_combo.setVisible(step == self._PROGRESSIVE_STEP_PROPERTY)
         self.operator_combo.setVisible(False)
         self.value_wrap.setVisible(False)
         self.settings_btn.setVisible(False)
@@ -271,7 +309,7 @@ class ConditionRow(QtWidgets.QFrame):
         return out
 
     def _rebuild_category_items(self) -> None:
-        previous = self.category_key()
+        previous = str(self.category_combo.currentData() or "").strip().lower()
         choices: List[str] = []
         for row in self._property_catalog:
             category = str(row.get("category") or "").strip().lower()
@@ -281,6 +319,7 @@ class ConditionRow(QtWidgets.QFrame):
         if not choices:
             choices = ["item"]
         options: List[tuple[str, str]] = []
+        options.append(("Choose item…", self._PROGRESSIVE_PLACEHOLDER_CATEGORY))
         for category in choices:
             label = str(self._CATEGORY_LABELS.get(category) or category.title())
             options.append((label, category))
@@ -288,15 +327,18 @@ class ConditionRow(QtWidgets.QFrame):
 
     def _reload_properties_for_category(self, category_key: str, *, preserve_property_key: str = "") -> None:
         wanted = str(category_key or "").strip().lower()
-        if not wanted:
-            wanted = "item"
-        property_rows = [row for row in self._property_catalog if str(row.get("category") or "").strip().lower() == wanted]
+        if wanted == self._PROGRESSIVE_PLACEHOLDER_CATEGORY:
+            wanted = ""
+        property_rows: List[Dict[str, str]] = []
+        if wanted:
+            property_rows = [row for row in self._property_catalog if str(row.get("category") or "").strip().lower() == wanted]
         if not property_rows:
             property_rows = list(self._property_catalog)
         self._label_to_key = {}
         wanted_key = str(preserve_property_key or "").strip().lower()
         options: List[tuple[str, str]] = []
         preserve_value = ""
+        options.append(("Choose property…", self._PROGRESSIVE_PLACEHOLDER_PROPERTY))
         for row in property_rows:
             display = str(row.get("label") or "").strip()
             value = str(row.get("key") or "").strip()
@@ -355,6 +397,8 @@ class ConditionRow(QtWidgets.QFrame):
         self.value_multi_picker.setToolTip(tip)
 
     def has_missing_required_value(self) -> bool:
+        if not self.property_key() or not self.operator_key():
+            return False
         if self.operator_key() == "exists":
             return False
         if self.value_text():
@@ -369,9 +413,14 @@ class ConditionRow(QtWidgets.QFrame):
     def _on_category_changed(self, _index: int) -> None:
         self._mark_user_interaction()
         selected_property = self.property_key()
+        if self._progressive_enabled:
+            selected_property = ""
         self._reload_properties_for_category(self.category_key(), preserve_property_key=selected_property)
         self._update_operator_items()
         self._configure_value_editor()
+        if self._progressive_enabled and self._progressive_step == self._PROGRESSIVE_STEP_ITEM and self.category_key():
+            self.set_progressive_step(self._PROGRESSIVE_STEP_PROPERTY)
+            self.focus_first_step()
         self.changed.emit()
 
     def _on_property_changed(self, _index: int) -> None:
@@ -533,6 +582,8 @@ class ConditionRow(QtWidgets.QFrame):
 
     def property_key(self) -> str:
         data = str(self.property_combo.currentData() or "").strip()
+        if data == self._PROGRESSIVE_PLACEHOLDER_PROPERTY:
+            return ""
         if data:
             return data
         text = str(self.property_combo.currentText() or "").strip().lower()
@@ -542,6 +593,8 @@ class ConditionRow(QtWidgets.QFrame):
 
     def category_key(self) -> str:
         current = str(self.category_combo.currentData() or "").strip().lower()
+        if current == self._PROGRESSIVE_PLACEHOLDER_CATEGORY:
+            return ""
         if current:
             return current
         key = self.property_key()
