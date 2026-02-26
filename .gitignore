@@ -11,4 +11,6 @@ build/
 *.ifc
 .ponker/ai_log.jsonl
 .ponker/clash_tests.db
-.claude/settings.local.json
+
+# Claude Code tooling state (machine-local; not part of the project)
+.claude/
