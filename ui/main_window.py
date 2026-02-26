@@ -6599,6 +6599,7 @@ class MainWindow(QtWidgets.QMainWindow):
             QComboBox#FindObjectsOperatorCombo,
             QLineEdit#FindObjectsValueInput,
             QToolButton#FindObjectsValuePickerTrigger,
+            QComboBox#FindObjectsValueEnumCombo,
             QComboBox#FindObjectsValueChoice {{
                 min-height: 32px;
                 padding: 2px 8px;
@@ -6613,12 +6614,40 @@ class MainWindow(QtWidgets.QMainWindow):
             QComboBox#FindObjectsOperatorCombo:focus,
             QLineEdit#FindObjectsValueInput:focus,
             QToolButton#FindObjectsValuePickerTrigger:focus,
+            QComboBox#FindObjectsValueEnumCombo:focus,
             QComboBox#FindObjectsValueChoice:focus {{
                 border-color: rgba(255, 46, 136, 120);
             }}
             QLineEdit#FindObjectsValueInput[invalid="true"],
             QToolButton#FindObjectsValuePickerTrigger[invalid="true"],
+            QComboBox#FindObjectsValueEnumCombo[invalid="true"],
             QComboBox#FindObjectsValueChoice[invalid="true"] {{
+                border-color: rgba(248, 113, 113, 185);
+                background: rgba(127, 29, 29, 0.28);
+            }}
+            QFrame#FindObjectsValueBoolWrap {{
+                background: transparent;
+                border: none;
+            }}
+            QToolButton#FindObjectsValueBoolTrueBtn,
+            QToolButton#FindObjectsValueBoolFalseBtn {{
+                min-height: 32px;
+                padding: 2px 8px;
+                border: 1px solid rgba(148, 163, 184, 44);
+                border-radius: 6px;
+                background: rgba(15, 23, 38, 0.78);
+                color: #E2E8F0;
+                font-size: 11px;
+                font-weight: 600;
+            }}
+            QToolButton#FindObjectsValueBoolTrueBtn:checked,
+            QToolButton#FindObjectsValueBoolFalseBtn:checked {{
+                border-color: rgba(255, 46, 136, 120);
+                background: rgba(255, 46, 136, 0.14);
+                color: #FCE7F3;
+            }}
+            QToolButton#FindObjectsValueBoolTrueBtn[invalid="true"],
+            QToolButton#FindObjectsValueBoolFalseBtn[invalid="true"] {{
                 border-color: rgba(248, 113, 113, 185);
                 background: rgba(127, 29, 29, 0.28);
             }}
@@ -6649,6 +6678,22 @@ class MainWindow(QtWidgets.QMainWindow):
             QToolButton#FindObjectsConditionSettingsBtn:hover {{
                 background: rgba(148, 163, 184, 0.16);
                 color: #CBD5E1;
+            }}
+            QToolButton#FindObjectsConditionRowEditBtn {{
+                background: transparent;
+                color: #94A3B8;
+                border: none;
+                border-radius: 6px;
+                min-width: 18px;
+                min-height: 18px;
+                max-width: 18px;
+                max-height: 18px;
+                font-size: 11px;
+                font-weight: 700;
+            }}
+            QToolButton#FindObjectsConditionRowEditBtn:hover {{
+                background: rgba(148, 163, 184, 0.16);
+                color: #E2E8F0;
             }}
             QToolButton#FindObjectsConditionRemoveBtn {{
                 background: transparent;

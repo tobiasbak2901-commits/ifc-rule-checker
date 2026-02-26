@@ -17,6 +17,7 @@ class ConditionRow(QtWidgets.QFrame):
     _PROGRESSIVE_PLACEHOLDER_CATEGORY = "__find_objects_choose_item__"
     _PROGRESSIVE_PLACEHOLDER_PROPERTY = "__find_objects_choose_property__"
     _PROGRESSIVE_PLACEHOLDER_OPERATOR = "__find_objects_choose_operation__"
+    _PROGRESSIVE_PLACEHOLDER_VALUE = "__find_objects_choose_value__"
 
     _OPERATORS: tuple[tuple[str, str], ...] = (
         ("equals", "equals"),
@@ -97,6 +98,7 @@ class ConditionRow(QtWidgets.QFrame):
         self._progressive_enabled = True
         self._progressive_step = self._PROGRESSIVE_STEP_ITEM
         self._progressive_reset_operator = False
+        self._progressive_collapsed = False
         self._number_validator = QtGui.QDoubleValidator(self)
         self._number_validator.setNotation(QtGui.QDoubleValidator.StandardNotation)
         self._distinct_values_provider = distinct_values_provider
@@ -195,17 +197,46 @@ class ConditionRow(QtWidgets.QFrame):
         self.value_input.setObjectName("FindObjectsValueInput")
         self.value_input.setPlaceholderText("Value")
         self.value_input.setMinimumHeight(32)
+
+        self.value_enum_combo = SearchableDropdown(self)
+        self.value_enum_combo.setObjectName("FindObjectsValueEnumCombo")
+        self.value_enum_combo.view().setObjectName("FindObjectsComboPopup")
+        self.value_enum_combo.view().setProperty("themeScope", "app")
+        self.value_enum_combo.set_popup_titles(recent="Recent", all_items="Values")
+        self.value_enum_combo.set_search_placeholder("Search values")
+        self.value_enum_combo.set_recent_settings_key("findObjects/recent/values")
+        self.value_enum_combo.setMinimumHeight(32)
+
         self.value_choice_combo = QtWidgets.QComboBox(self)
         self.value_choice_combo.setObjectName("FindObjectsValueChoice")
         self.value_choice_combo.view().setObjectName("FindObjectsComboPopup")
         self.value_choice_combo.view().setProperty("themeScope", "app")
         self.value_choice_combo.setMinimumHeight(32)
+
+        self.value_bool_wrap = QtWidgets.QFrame(self)
+        self.value_bool_wrap.setObjectName("FindObjectsValueBoolWrap")
+        bool_layout = QtWidgets.QHBoxLayout(self.value_bool_wrap)
+        bool_layout.setContentsMargins(0, 0, 0, 0)
+        bool_layout.setSpacing(6)
+        self.value_bool_true_btn = QtWidgets.QToolButton(self.value_bool_wrap)
+        self.value_bool_true_btn.setObjectName("FindObjectsValueBoolTrueBtn")
+        self.value_bool_true_btn.setText("True")
+        self.value_bool_true_btn.setCheckable(True)
+        self.value_bool_false_btn = QtWidgets.QToolButton(self.value_bool_wrap)
+        self.value_bool_false_btn.setObjectName("FindObjectsValueBoolFalseBtn")
+        self.value_bool_false_btn.setText("False")
+        self.value_bool_false_btn.setCheckable(True)
+        bool_layout.addWidget(self.value_bool_true_btn, 1)
+        bool_layout.addWidget(self.value_bool_false_btn, 1)
+
         self.value_multi_picker = MultiValuePickerEditor(self)
         self.value_multi_picker.setObjectName("FindObjectsValuePicker")
         self.value_stack = QtWidgets.QStackedWidget(self)
         self.value_stack.addWidget(self.value_input)
+        self.value_stack.addWidget(self.value_enum_combo)
         self.value_stack.addWidget(self.value_choice_combo)
         self.value_stack.addWidget(self.value_multi_picker)
+        self.value_stack.addWidget(self.value_bool_wrap)
         self.value_stack.setCurrentWidget(self.value_input)
         self.value_unit_label = QtWidgets.QLabel("", self)
         self.value_unit_label.setObjectName("FindObjectsValueUnit")
@@ -218,6 +249,18 @@ class ConditionRow(QtWidgets.QFrame):
         value_layout.addWidget(self.value_stack, 1)
         value_layout.addWidget(self.value_unit_label, 0, QtCore.Qt.AlignVCenter)
         layout.addWidget(self.value_wrap, 2)
+
+        self.value_chip_frame = QtWidgets.QFrame(self)
+        self.value_chip_frame.setObjectName("FindObjectsConditionStepChipFrame")
+        value_chip_layout = QtWidgets.QHBoxLayout(self.value_chip_frame)
+        value_chip_layout.setContentsMargins(8, 2, 8, 2)
+        value_chip_layout.setSpacing(6)
+        self.value_chip_label = QtWidgets.QLabel("", self.value_chip_frame)
+        self.value_chip_label.setObjectName("FindObjectsConditionStepChipLabel")
+        self.value_chip_label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        value_chip_layout.addWidget(self.value_chip_label, 1)
+        self.value_chip_frame.setVisible(False)
+        layout.addWidget(self.value_chip_frame, 2)
 
         self.settings_btn = QtWidgets.QToolButton(self)
         self.settings_btn.setObjectName("FindObjectsConditionSettingsBtn")
@@ -242,6 +285,14 @@ class ConditionRow(QtWidgets.QFrame):
         self.settings_btn.setMenu(self.settings_menu)
         layout.addWidget(self.settings_btn, 0)
 
+        self.row_edit_btn = QtWidgets.QToolButton(self)
+        self.row_edit_btn.setObjectName("FindObjectsConditionRowEditBtn")
+        self.row_edit_btn.setText("✎")
+        self.row_edit_btn.setAutoRaise(True)
+        self.row_edit_btn.setToolTip("Edit condition")
+        self.row_edit_btn.setVisible(False)
+        layout.addWidget(self.row_edit_btn, 0)
+
         self.remove_btn = QtWidgets.QToolButton(self)
         self.remove_btn.setObjectName("FindObjectsConditionRemoveBtn")
         self.remove_btn.setText("X")
@@ -263,11 +314,15 @@ class ConditionRow(QtWidgets.QFrame):
         self.operator_combo.currentIndexChanged.connect(self._on_operator_changed)
         self.value_input.textChanged.connect(self._on_value_text_changed)
         self.value_choice_combo.currentIndexChanged.connect(self._on_value_choice_changed)
+        self.value_enum_combo.currentIndexChanged.connect(self._on_value_enum_changed)
         self.value_multi_picker.valueChanged.connect(self._on_value_multi_picker_changed)
+        self.value_bool_true_btn.clicked.connect(lambda: self._on_value_bool_clicked(True))
+        self.value_bool_false_btn.clicked.connect(lambda: self._on_value_bool_clicked(False))
         self.remove_btn.clicked.connect(lambda: self.removeRequested.emit(self))
         self.item_chip_edit_btn.clicked.connect(lambda: self._edit_progressive_item())
         self.property_chip_edit_btn.clicked.connect(lambda: self._edit_progressive_property())
         self.operator_chip_edit_btn.clicked.connect(lambda: self._edit_progressive_operator())
+        self.row_edit_btn.clicked.connect(self._edit_progressive_completed_row)
         self._configure_value_editor()
         self._apply_progressive_visibility()
         self._suppress_interaction_events = False
@@ -287,6 +342,7 @@ class ConditionRow(QtWidgets.QFrame):
     def set_progressive_step(self, step: int) -> None:
         if not self._progressive_enabled:
             return
+        self._progressive_collapsed = False
         normalized = int(step or self._PROGRESSIVE_STEP_ITEM)
         self._progressive_step = max(self._PROGRESSIVE_STEP_ITEM, min(self._PROGRESSIVE_STEP_VALUE, normalized))
         self._apply_progressive_visibility()
@@ -301,6 +357,11 @@ class ConditionRow(QtWidgets.QFrame):
 
     def _edit_progressive_operator(self) -> None:
         self.set_progressive_step(self._PROGRESSIVE_STEP_OPERATION)
+        self.focus_first_step()
+
+    def _edit_progressive_completed_row(self) -> None:
+        self._progressive_collapsed = False
+        self.set_progressive_step(self._PROGRESSIVE_STEP_VALUE)
         self.focus_first_step()
 
     def _sync_item_chip(self) -> None:
@@ -340,13 +401,62 @@ class ConditionRow(QtWidgets.QFrame):
         self.operator_chip_label.setText(text)
         self.operator_chip_frame.setToolTip(text)
 
+    def _sync_value_chip(self) -> None:
+        op_key = self.operator_key()
+        if op_key == "exists":
+            self.value_chip_label.setText("")
+            self.value_chip_frame.setToolTip("")
+            return
+        value = self.value_text()
+        if not value:
+            self.value_chip_label.setText("")
+            self.value_chip_frame.setToolTip("")
+            return
+        shown = value
+        if len(shown) > 40:
+            shown = shown[:37].rstrip() + "..."
+        text = f"Value: {shown}"
+        self.value_chip_label.setText(text)
+        self.value_chip_frame.setToolTip(value)
+
+    def _progressive_is_complete(self) -> bool:
+        if not self.property_key() or not self.operator_key():
+            return False
+        if self.operator_key() == "exists":
+            return True
+        return bool(self.value_text())
+
+    def _maybe_collapse_progressive_row(self) -> None:
+        if not self._progressive_enabled or self._progressive_collapsed:
+            return
+        if self._progressive_is_complete():
+            self._progressive_collapsed = True
+            self._apply_progressive_visibility()
+
     def _apply_progressive_visibility(self) -> None:
         if not self._progressive_enabled:
             return
-        step = int(self._progressive_step or self._PROGRESSIVE_STEP_ITEM)
         self._sync_item_chip()
         self._sync_property_chip()
         self._sync_operator_chip()
+        self._sync_value_chip()
+        if self._progressive_collapsed:
+            self.category_combo.setVisible(False)
+            self.property_combo.setVisible(False)
+            self.operator_combo.setVisible(False)
+            self.value_wrap.setVisible(False)
+            self.item_chip_frame.setVisible(bool(self.category_key()))
+            self.property_chip_frame.setVisible(bool(self.property_key()))
+            self.operator_chip_frame.setVisible(bool(self.operator_key()))
+            self.value_chip_frame.setVisible(bool(self.value_chip_label.text()))
+            self.item_chip_edit_btn.setVisible(False)
+            self.property_chip_edit_btn.setVisible(False)
+            self.operator_chip_edit_btn.setVisible(False)
+            self.row_edit_btn.setVisible(True)
+            self.settings_btn.setVisible(False)
+            return
+
+        step = int(self._progressive_step or self._PROGRESSIVE_STEP_ITEM)
         self.category_combo.setVisible(step == self._PROGRESSIVE_STEP_ITEM)
         self.item_chip_frame.setVisible(step >= self._PROGRESSIVE_STEP_PROPERTY and bool(self.category_key()))
         self.property_combo.setVisible(step == self._PROGRESSIVE_STEP_PROPERTY)
@@ -354,6 +464,11 @@ class ConditionRow(QtWidgets.QFrame):
         self.operator_combo.setVisible(step == self._PROGRESSIVE_STEP_OPERATION)
         self.operator_chip_frame.setVisible(step >= self._PROGRESSIVE_STEP_VALUE and bool(self.operator_key()))
         self.value_wrap.setVisible(step == self._PROGRESSIVE_STEP_VALUE)
+        self.value_chip_frame.setVisible(False)
+        self.item_chip_edit_btn.setVisible(step >= self._PROGRESSIVE_STEP_PROPERTY)
+        self.property_chip_edit_btn.setVisible(step >= self._PROGRESSIVE_STEP_OPERATION)
+        self.operator_chip_edit_btn.setVisible(step >= self._PROGRESSIVE_STEP_VALUE)
+        self.row_edit_btn.setVisible(False)
         self.settings_btn.setVisible(False)
 
     def _normalize_property_options(
@@ -474,10 +589,14 @@ class ConditionRow(QtWidgets.QFrame):
         is_invalid = bool(invalid and self.operator_key() != "exists")
         self._set_widget_invalid(self.value_input, is_invalid)
         self._set_widget_invalid(self.value_choice_combo, is_invalid)
+        self._set_widget_invalid(self.value_enum_combo, is_invalid)
+        self._set_widget_invalid(self.value_bool_true_btn, is_invalid)
+        self._set_widget_invalid(self.value_bool_false_btn, is_invalid)
         self.value_multi_picker.set_invalid(is_invalid)
         tip = "Value is required for this operator." if is_invalid else ""
         self.value_input.setToolTip(tip)
         self.value_choice_combo.setToolTip(tip)
+        self.value_enum_combo.setToolTip(tip)
         self.value_multi_picker.setToolTip(tip)
 
     def has_missing_required_value(self) -> bool:
@@ -531,10 +650,32 @@ class ConditionRow(QtWidgets.QFrame):
 
     def _on_value_text_changed(self, _text: str) -> None:
         self._mark_user_interaction()
+        self._maybe_collapse_progressive_row()
         self.changed.emit()
 
     def _on_value_choice_changed(self, _index: int) -> None:
         self._mark_user_interaction()
+        self._maybe_collapse_progressive_row()
+        self.changed.emit()
+
+    def _on_value_enum_changed(self, _index: int) -> None:
+        self._mark_user_interaction()
+        self._maybe_collapse_progressive_row()
+        self.changed.emit()
+
+    def _on_value_bool_clicked(self, value: bool) -> None:
+        self._mark_user_interaction()
+        target = self.value_bool_true_btn if value else self.value_bool_false_btn
+        other = self.value_bool_false_btn if value else self.value_bool_true_btn
+        target.blockSignals(True)
+        other.blockSignals(True)
+        try:
+            target.setChecked(True)
+            other.setChecked(False)
+        finally:
+            target.blockSignals(False)
+            other.blockSignals(False)
+        self._maybe_collapse_progressive_row()
         self.changed.emit()
 
     def _on_value_multi_picker_changed(self) -> None:
@@ -543,6 +684,7 @@ class ConditionRow(QtWidgets.QFrame):
             idx = self.operator_combo.findData("in_list")
             if idx >= 0 and idx != self.operator_combo.currentIndex():
                 self.operator_combo.setCurrentIndex(idx)
+        self._maybe_collapse_progressive_row()
         self.changed.emit()
 
     def _set_choice_items(self, items: Sequence[tuple[str, str]], *, selected_value: str) -> None:
@@ -595,12 +737,16 @@ class ConditionRow(QtWidgets.QFrame):
             self.value_stack.setEnabled(requires_value)
             self.value_input.setEnabled(requires_value)
             self.value_choice_combo.setEnabled(requires_value)
+            self.value_enum_combo.setEnabled(requires_value)
+            self.value_bool_true_btn.setEnabled(requires_value)
+            self.value_bool_false_btn.setEnabled(requires_value)
             if not requires_value:
                 self.value_input.setValidator(None)
                 self.value_input.setText("")
                 self.value_input.setPlaceholderText("Value")
                 self.value_input.setToolTip("")
                 self.value_choice_combo.setToolTip("")
+                self.value_enum_combo.setToolTip("")
                 self.value_unit_label.setVisible(False)
                 self.set_value_invalid(False)
                 return
@@ -616,31 +762,47 @@ class ConditionRow(QtWidgets.QFrame):
             else:
                 self.value_input.setToolTip("")
                 self.value_choice_combo.setToolTip("")
+                self.value_enum_combo.setToolTip("")
 
             if kind == "boolean":
-                self.value_stack.setCurrentWidget(self.value_choice_combo)
-                self._set_choice_items([("true", "true"), ("false", "false")], selected_value=current_value)
+                self.value_stack.setCurrentWidget(self.value_bool_wrap)
+                wanted = str(current_value or "").strip().lower()
+                self.value_bool_true_btn.blockSignals(True)
+                self.value_bool_false_btn.blockSignals(True)
+                try:
+                    self.value_bool_true_btn.setChecked(wanted == "true")
+                    self.value_bool_false_btn.setChecked(wanted == "false")
+                finally:
+                    self.value_bool_true_btn.blockSignals(False)
+                    self.value_bool_false_btn.blockSignals(False)
                 self.value_unit_label.setVisible(False)
                 return
 
             if kind in {"enum", "list"}:
                 choices = [str(choice).strip() for choice in list(spec.get("choices") or []) if str(choice).strip()]
-                if len(choices) >= 12 or op == "in_list":
+                if op == "in_list":
                     self.value_stack.setCurrentWidget(self.value_multi_picker)
                     self.value_multi_picker.set_values(choices, selected_csv=current_value)
                     self.value_unit_label.setVisible(False)
                     return
-                items = [(choice, choice) for choice in choices] if choices else [("Select...", "")]
-                self.value_stack.setCurrentWidget(self.value_choice_combo)
-                self._set_choice_items(items, selected_value=current_value)
+                options: List[tuple[str, str]] = [("Choose value…", self._PROGRESSIVE_PLACEHOLDER_VALUE)]
+                options.extend((choice, choice) for choice in choices)
+                self.value_stack.setCurrentWidget(self.value_enum_combo)
+                self.value_enum_combo.set_options(options, preserve_value=current_value)
                 self.value_unit_label.setVisible(False)
                 return
 
             if kind == "enum_dynamic":
                 dynamic_values = self._distinct_values_for_property(self.property_key())
                 if dynamic_values:
-                    self.value_stack.setCurrentWidget(self.value_multi_picker)
-                    self.value_multi_picker.set_values(dynamic_values, selected_csv=current_value)
+                    if op == "in_list":
+                        self.value_stack.setCurrentWidget(self.value_multi_picker)
+                        self.value_multi_picker.set_values(dynamic_values, selected_csv=current_value)
+                    else:
+                        options = [("Choose value…", self._PROGRESSIVE_PLACEHOLDER_VALUE)]
+                        options.extend((value, value) for value in dynamic_values)
+                        self.value_stack.setCurrentWidget(self.value_enum_combo)
+                        self.value_enum_combo.set_options(options, preserve_value=current_value)
                     self.value_unit_label.setVisible(False)
                     return
                 self.value_stack.setCurrentWidget(self.value_input)
@@ -673,8 +835,11 @@ class ConditionRow(QtWidgets.QFrame):
         self._mark_user_interaction()
         self._configure_value_editor()
         if self._progressive_enabled and self._progressive_step == self._PROGRESSIVE_STEP_OPERATION and self.operator_key():
-            self.set_progressive_step(self._PROGRESSIVE_STEP_VALUE)
-            self.focus_first_step()
+            if self.operator_key() == "exists":
+                self._maybe_collapse_progressive_row()
+            else:
+                self.set_progressive_step(self._PROGRESSIVE_STEP_VALUE)
+                self.focus_first_step()
         self.changed.emit()
 
     def property_key(self) -> str:
@@ -708,10 +873,21 @@ class ConditionRow(QtWidgets.QFrame):
         return current
 
     def value_text(self) -> str:
+        if self.value_stack.currentWidget() is self.value_enum_combo:
+            value = str(self.value_enum_combo.currentData() or "").strip()
+            if value == self._PROGRESSIVE_PLACEHOLDER_VALUE:
+                return ""
+            return value
         if self.value_stack.currentWidget() is self.value_choice_combo:
             return str(self.value_choice_combo.currentData() or self.value_choice_combo.currentText() or "").strip()
         if self.value_stack.currentWidget() is self.value_multi_picker:
             return str(self.value_multi_picker.csv_text() or "").strip()
+        if self.value_stack.currentWidget() is self.value_bool_wrap:
+            if self.value_bool_true_btn.isChecked():
+                return "true"
+            if self.value_bool_false_btn.isChecked():
+                return "false"
+            return ""
         return str(self.value_input.text() or "").strip()
 
     def is_active(self) -> bool:
