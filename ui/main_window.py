@@ -3097,15 +3097,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_scope_warning.setVisible(False)
         self.find_objects_selected_count = QtWidgets.QLabel("Selected: 0")
         self.find_objects_selected_count.setObjectName("SecondaryText")
+        self.find_objects_selected_count.setVisible(False)
         self.find_objects_indexed_count = QtWidgets.QLabel("Indexed: 0")
         self.find_objects_indexed_count.setObjectName("SecondaryText")
         self.find_objects_indexed_count.setVisible(False)
         self.find_objects_scope_elements_count = QtWidgets.QLabel("Scope elements: 0")
         self.find_objects_scope_elements_count.setObjectName("SecondaryText")
+        self.find_objects_scope_elements_count.setVisible(False)
+        self.find_objects_scope_chip_clear_btn = QtWidgets.QToolButton(self.find_objects_header_frame)
+        self.find_objects_scope_chip_clear_btn.setObjectName("FindObjectsScopeChipClearBtn")
+        self.find_objects_scope_chip_clear_btn.setText("✕")
+        self.find_objects_scope_chip_clear_btn.setAutoRaise(True)
+        self.find_objects_scope_chip_clear_btn.setToolTip("Clear scope filter — switch to Everywhere")
+        self.find_objects_scope_chip_clear_btn.setVisible(False)
+        self.find_objects_scope_chip_clear_btn.clicked.connect(self._on_find_objects_scope_condition_removed)
         scope_meta_row.addWidget(self.find_objects_scope_selection_chip, 0)
+        scope_meta_row.addWidget(self.find_objects_scope_chip_clear_btn, 0)
         scope_meta_row.addWidget(self.find_objects_scope_warning, 0)
-        scope_meta_row.addWidget(self.find_objects_selected_count, 0)
-        scope_meta_row.addWidget(self.find_objects_scope_elements_count, 0)
         scope_meta_row.addStretch(1)
         self.find_objects_add_filter_btn = QtWidgets.QToolButton(self.find_objects_header_frame)
         self.find_objects_add_filter_btn.setObjectName("FindObjectsAddFilterBtn")
@@ -3228,6 +3236,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_results_count_large.setVisible(False)
         self.find_objects_results_scope_label = QtWidgets.QLabel("Scope: Everywhere")
         self.find_objects_results_scope_label.setObjectName("FindObjectsResultsScopeLabel")
+        self.find_objects_results_scope_label.setVisible(False)
         results_header_row = QtWidgets.QHBoxLayout()
         results_header_row.setContentsMargins(0, 0, 0, 0)
         results_header_row.setSpacing(12)
@@ -6374,6 +6383,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 color: #FCA5A5;
                 font-size: 11px;
                 font-weight: 600;
+            }}
+            QToolButton#FindObjectsScopeChipClearBtn {{
+                color: #94A3B8;
+                background: transparent;
+                border: none;
+                font-size: 11px;
+                padding: 0px 2px;
+            }}
+            QToolButton#FindObjectsScopeChipClearBtn:hover {{
+                color: #F1F5F9;
             }}
             QFrame#FindObjectsScopeConditionRow {{
                 background: transparent;
@@ -11096,6 +11115,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_scope_active.setText(f"Active: {self._find_objects_scope_label(self._find_objects_scope)}")
         if hasattr(self, "find_objects_results_scope_label"):
             self.find_objects_results_scope_label.setText(f"Scope: {self._find_objects_scope_label(self._find_objects_scope)}")
+            self.find_objects_results_scope_label.setVisible(
+                str(self._find_objects_scope or "").strip().lower() not in {"everywhere", ""}
+            )
         self._update_find_objects_scope_selection_ui()
         self._update_find_objects_scope_count()
         self._update_find_objects_footer_actions()
@@ -11346,22 +11368,29 @@ class MainWindow(QtWidgets.QMainWindow):
 
         summary, tooltip = self._find_objects_scope_selection_summary(selected_ids)
 
+        clear_btn = getattr(self, "find_objects_scope_chip_clear_btn", None)
         if not is_selection_scope:
             warning.setVisible(False)
             chip.setVisible(False)
             chip.setText("")
             chip.setToolTip("")
+            if clear_btn is not None:
+                clear_btn.setVisible(False)
         elif selected_count <= 0:
             warning.setText("No selection in Object Tree")
             warning.setVisible(True)
             chip.setVisible(False)
             chip.setText("")
             chip.setToolTip("")
+            if clear_btn is not None:
+                clear_btn.setVisible(False)
         else:
             warning.setVisible(False)
             chip.setText(summary)
             chip.setToolTip(tooltip)
             chip.setVisible(True)
+            if clear_btn is not None:
+                clear_btn.setVisible(True)
         self._update_find_objects_scope_condition_row()
 
     def _update_find_objects_selected_count(self) -> None:
@@ -12815,6 +12844,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_results_count_large.setText(f"{len(rows)} objects found")
         if hasattr(self, "find_objects_results_scope_label"):
             self.find_objects_results_scope_label.setText(f"Scope: {self._find_objects_scope_label(self._find_objects_scope)}")
+            self.find_objects_results_scope_label.setVisible(
+                str(self._find_objects_scope or "").strip().lower() not in {"everywhere", ""}
+            )
         has_results = bool(rows)
         self.find_objects_select_all_btn.setEnabled(has_results)
         self.find_objects_isolate_btn.setEnabled(has_results)
