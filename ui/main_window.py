@@ -11887,6 +11887,7 @@ class MainWindow(QtWidgets.QMainWindow):
         row.changed.connect(lambda gid=group_id: self._on_find_objects_condition_row_changed(group_id=gid))
         row.removeRequested.connect(self._remove_find_objects_condition_row)
         rows_layout.addWidget(row, 0)
+        row.focus_first_step()
         rows = group.get("rows")
         if isinstance(rows, list):
             rows.append(row)

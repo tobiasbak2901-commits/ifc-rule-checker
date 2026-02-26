@@ -10,6 +10,10 @@ from ui.value_picker import MultiValuePickerEditor
 class ConditionRow(QtWidgets.QFrame):
     changed = QtCore.Signal()
     removeRequested = QtCore.Signal(object)
+    _PROGRESSIVE_STEP_ITEM = 1
+    _PROGRESSIVE_STEP_PROPERTY = 2
+    _PROGRESSIVE_STEP_OPERATION = 3
+    _PROGRESSIVE_STEP_VALUE = 4
 
     _OPERATORS: tuple[tuple[str, str], ...] = (
         ("equals", "equals"),
@@ -87,6 +91,8 @@ class ConditionRow(QtWidgets.QFrame):
         self._default_property_key = ""
         self._default_operator_key = ""
         self._default_category_key = ""
+        self._progressive_enabled = True
+        self._progressive_step = self._PROGRESSIVE_STEP_ITEM
         self._number_validator = QtGui.QDoubleValidator(self)
         self._number_validator.setNotation(QtGui.QDoubleValidator.StandardNotation)
         self._distinct_values_provider = distinct_values_provider
@@ -146,14 +152,14 @@ class ConditionRow(QtWidgets.QFrame):
         self.value_unit_label = QtWidgets.QLabel("", self)
         self.value_unit_label.setObjectName("FindObjectsValueUnit")
         self.value_unit_label.setVisible(False)
-        value_wrap = QtWidgets.QWidget(self)
-        value_wrap.setObjectName("FindObjectsValueWrap")
-        value_layout = QtWidgets.QHBoxLayout(value_wrap)
+        self.value_wrap = QtWidgets.QWidget(self)
+        self.value_wrap.setObjectName("FindObjectsValueWrap")
+        value_layout = QtWidgets.QHBoxLayout(self.value_wrap)
         value_layout.setContentsMargins(0, 0, 0, 0)
         value_layout.setSpacing(4)
         value_layout.addWidget(self.value_stack, 1)
         value_layout.addWidget(self.value_unit_label, 0, QtCore.Qt.AlignVCenter)
-        layout.addWidget(value_wrap, 2)
+        layout.addWidget(self.value_wrap, 2)
 
         self.settings_btn = QtWidgets.QToolButton(self)
         self.settings_btn.setObjectName("FindObjectsConditionSettingsBtn")
@@ -201,7 +207,37 @@ class ConditionRow(QtWidgets.QFrame):
         self.value_multi_picker.valueChanged.connect(self._on_value_multi_picker_changed)
         self.remove_btn.clicked.connect(lambda: self.removeRequested.emit(self))
         self._configure_value_editor()
+        self._apply_progressive_visibility()
         self._suppress_interaction_events = False
+
+    def focus_first_step(self) -> None:
+        if self._progressive_step == self._PROGRESSIVE_STEP_ITEM:
+            self.category_combo.setFocus(QtCore.Qt.TabFocusReason)
+            return
+        if self._progressive_step == self._PROGRESSIVE_STEP_PROPERTY:
+            self.property_combo.setFocus(QtCore.Qt.TabFocusReason)
+            return
+        if self._progressive_step == self._PROGRESSIVE_STEP_OPERATION:
+            self.operator_combo.setFocus(QtCore.Qt.TabFocusReason)
+            return
+        self.value_stack.setFocus(QtCore.Qt.TabFocusReason)
+
+    def set_progressive_step(self, step: int) -> None:
+        if not self._progressive_enabled:
+            return
+        normalized = int(step or self._PROGRESSIVE_STEP_ITEM)
+        self._progressive_step = max(self._PROGRESSIVE_STEP_ITEM, min(self._PROGRESSIVE_STEP_VALUE, normalized))
+        self._apply_progressive_visibility()
+
+    def _apply_progressive_visibility(self) -> None:
+        if not self._progressive_enabled:
+            return
+        step = int(self._progressive_step or self._PROGRESSIVE_STEP_ITEM)
+        self.category_combo.setVisible(step == self._PROGRESSIVE_STEP_ITEM)
+        self.property_combo.setVisible(False)
+        self.operator_combo.setVisible(False)
+        self.value_wrap.setVisible(False)
+        self.settings_btn.setVisible(False)
 
     def _normalize_property_options(
         self,
