@@ -3031,14 +3031,23 @@ class MainWindow(QtWidgets.QMainWindow):
         find_objects_layout.setContentsMargins(16, 16, 16, 16)
         find_objects_layout.setSpacing(10)
 
+        # Primary action buttons created early so they can live in the header row.
+        self.find_objects_find_btn = QtWidgets.QPushButton("Find all")
+        self.find_objects_find_btn.setObjectName("FindObjectsFindPrimary")
+        self.find_objects_clear_btn = QtWidgets.QPushButton("Clear")
+        self.find_objects_clear_btn.setObjectName("FindObjectsClearSecondary")
+        self.find_objects_clear_btn.setVisible(True)
+
         self.find_objects_header_frame = QtWidgets.QFrame(self.find_objects_group)
         self.find_objects_header_frame.setObjectName("FindObjectsHeaderZone")
         header_section = QtWidgets.QVBoxLayout(self.find_objects_header_frame)
         header_section.setContentsMargins(0, 0, 0, 0)
         header_section.setSpacing(6)
 
+        # Section title kept for code references but hidden — combo shows the active scope.
         self.find_objects_scope_section_title = QtWidgets.QLabel("Search scope")
         self.find_objects_scope_section_title.setObjectName("FindObjectsZoneTitle")
+        self.find_objects_scope_section_title.setVisible(False)
 
         self.find_objects_scope_combo = QtWidgets.QComboBox()
         self.find_objects_scope_combo.setObjectName("FindObjectsScopeCombo")
@@ -3050,36 +3059,36 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_scope_combo.view().setProperty("themeScope", "app")
         self.find_objects_scope_combo.setMinimumWidth(220)
 
-        scope_row = QtWidgets.QHBoxLayout()
-        scope_row.setContentsMargins(0, 0, 0, 0)
-        scope_row.setSpacing(8)
-        scope_row.addWidget(self.find_objects_scope_section_title, 0)
-        scope_row.addStretch(1)
-        scope_row.addWidget(self.find_objects_scope_combo, 0)
-        header_section.addLayout(scope_row, 0)
-
-        search_row = QtWidgets.QHBoxLayout()
-        search_row.setContentsMargins(0, 0, 0, 0)
-        search_row.setSpacing(8)
         self.find_objects_search_edit = QtWidgets.QLineEdit()
         self.find_objects_search_edit.setObjectName("FindObjectsSearchInput")
         self.find_objects_search_edit.setPlaceholderText("Quick search (name, system, type...)")
         self.find_objects_search_edit.setClearButtonEnabled(True)
-        search_row.addWidget(self.find_objects_search_edit, 1)
+
+        # Suggest button kept for code references but hidden in the minimal header.
         self.find_objects_suggest_btn = QtWidgets.QToolButton()
         self.find_objects_suggest_btn.setObjectName("FindObjectsSuggestBtn")
         self.find_objects_suggest_btn.setText("Suggest")
         self.find_objects_suggest_btn.setCursor(QtCore.Qt.PointingHandCursor)
         self.find_objects_suggest_btn.setAutoRaise(True)
         self.find_objects_suggest_btn.setToolTip("Get quick heuristic filter suggestions")
-        search_row.addWidget(self.find_objects_suggest_btn, 0)
-        header_section.addLayout(search_row, 0)
+        self.find_objects_suggest_btn.setVisible(False)
+
+        # Minimal primary row: [scope combo] [quick search] [Find all]
+        primary_row = QtWidgets.QHBoxLayout()
+        primary_row.setContentsMargins(0, 0, 0, 0)
+        primary_row.setSpacing(8)
+        primary_row.addWidget(self.find_objects_scope_combo, 1)
+        primary_row.addWidget(self.find_objects_search_edit, 2)
+        primary_row.addWidget(self.find_objects_find_btn, 0)
+        header_section.addLayout(primary_row, 0)
 
         scope_meta_row = QtWidgets.QHBoxLayout()
         scope_meta_row.setContentsMargins(0, 0, 0, 0)
         scope_meta_row.setSpacing(8)
+        # scope_active label kept for code references but hidden — combo already shows scope.
         self.find_objects_scope_active = QtWidgets.QLabel("Active: Everywhere")
         self.find_objects_scope_active.setObjectName("SecondaryText")
+        self.find_objects_scope_active.setVisible(False)
         self.find_objects_scope_selection_chip = QtWidgets.QLabel("", self.find_objects_header_frame)
         self.find_objects_scope_selection_chip.setObjectName("FindObjectsScopeSelectionChip")
         self.find_objects_scope_selection_chip.setVisible(False)
@@ -3090,23 +3099,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_selected_count.setObjectName("SecondaryText")
         self.find_objects_indexed_count = QtWidgets.QLabel("Indexed: 0")
         self.find_objects_indexed_count.setObjectName("SecondaryText")
+        self.find_objects_indexed_count.setVisible(False)
         self.find_objects_scope_elements_count = QtWidgets.QLabel("Scope elements: 0")
         self.find_objects_scope_elements_count.setObjectName("SecondaryText")
-        scope_meta_row.addWidget(self.find_objects_scope_active, 0)
         scope_meta_row.addWidget(self.find_objects_scope_selection_chip, 0)
         scope_meta_row.addWidget(self.find_objects_scope_warning, 0)
         scope_meta_row.addWidget(self.find_objects_selected_count, 0)
         scope_meta_row.addWidget(self.find_objects_scope_elements_count, 0)
         scope_meta_row.addStretch(1)
-        scope_meta_row.addWidget(self.find_objects_indexed_count, 0)
         header_section.addLayout(scope_meta_row, 0)
         find_objects_layout.addWidget(self.find_objects_header_frame, 0)
-
-        self.find_objects_find_btn = QtWidgets.QPushButton("Find all")
-        self.find_objects_find_btn.setObjectName("FindObjectsFindPrimary")
-        self.find_objects_clear_btn = QtWidgets.QPushButton("Clear")
-        self.find_objects_clear_btn.setObjectName("FindObjectsClearSecondary")
-        self.find_objects_clear_btn.setVisible(True)
 
         self.find_objects_advanced_toggle_btn = QtWidgets.QToolButton(self.find_objects_group)
         self.find_objects_advanced_toggle_btn.setObjectName("FindObjectsAdvancedToggle")
@@ -3325,7 +3327,6 @@ class MainWindow(QtWidgets.QMainWindow):
         footer_actions.addWidget(self.find_objects_isolate_btn, 0)
         footer_actions.addWidget(self.find_objects_focus_btn, 0)
         footer_actions.addWidget(self.find_objects_clear_btn, 0)
-        footer_actions.addWidget(self.find_objects_find_btn, 0)
         find_objects_layout.addWidget(self.find_objects_action_footer, 0)
 
         self.find_objects_footer_frame = QtWidgets.QFrame(self.find_objects_group)
