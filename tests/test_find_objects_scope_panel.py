@@ -437,3 +437,39 @@ def test_find_objects_add_filter_editor_with_datatype_operators():
 
     # _update_operator_items is called on property and category changes
     assert "self._update_operator_items()" in condition_src
+
+
+def test_find_objects_options_menu_declutters_toggles():
+    """Prune/elements-only checkboxes must be moved out of the visible footer into
+    a compact ⋯ Options overflow menu; behavior (isChecked) must remain intact."""
+    source = Path("ui/main_window.py").read_text(encoding="utf-8")
+
+    # Checkboxes still exist for behavior-code compatibility
+    assert 'self.find_objects_prune_below_checkbox = QtWidgets.QCheckBox("Prune below result")' in source
+    assert 'self.find_objects_elements_only_checkbox = QtWidgets.QCheckBox("Elements only")' in source
+    # Checkboxes are hidden from the visible layout
+    assert "self.find_objects_prune_below_checkbox.setVisible(False)" in source
+    assert "self.find_objects_elements_only_checkbox.setVisible(False)" in source
+
+    # Options overflow button exists in the footer
+    assert 'self.find_objects_options_btn.setObjectName("FindObjectsOptionsBtn")' in source
+    assert 'self.find_objects_options_btn.setText("⋯ Options")' in source
+    assert "self.find_objects_options_btn.setPopupMode(QtWidgets.QToolButton.InstantPopup)" in source
+
+    # Options menu with two checkable actions
+    assert 'self.find_objects_options_menu.setObjectName("FindObjectsOptionsMenu")' in source
+    assert 'self.find_objects_options_action_prune = self.find_objects_options_menu.addAction("Prune below result")' in source
+    assert "self.find_objects_options_action_prune.setCheckable(True)" in source
+    assert "self.find_objects_options_action_elements_only = self.find_objects_options_menu.addAction(\"Elements only\")" in source
+    assert "self.find_objects_options_action_elements_only.setCheckable(True)" in source
+
+    # Actions synced to checkboxes so behavior code (isChecked) still works
+    assert "self.find_objects_options_action_prune.toggled.connect(self.find_objects_prune_below_checkbox.setChecked)" in source
+    assert "self.find_objects_options_action_elements_only.toggled.connect(self.find_objects_elements_only_checkbox.setChecked)" in source
+
+    # QSS for the options button
+    assert "QToolButton#FindObjectsOptionsBtn {" in source
+
+    # Theme overrides include the new menu name
+    dropdowns = Path("ui/theme_overrides/dropdowns.qss").read_text(encoding="utf-8")
+    assert 'QMenu#FindObjectsOptionsMenu[themeScope="app"]' in dropdowns

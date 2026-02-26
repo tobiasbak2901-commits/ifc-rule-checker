@@ -3298,12 +3298,30 @@ class MainWindow(QtWidgets.QMainWindow):
         footer_actions = QtWidgets.QHBoxLayout(self.find_objects_action_footer)
         footer_actions.setContentsMargins(10, 8, 10, 8)
         footer_actions.setSpacing(8)
+        # Checkboxes kept for behavior-code compatibility; state is driven by the options menu.
         self.find_objects_prune_below_checkbox = QtWidgets.QCheckBox("Prune below result")
         self.find_objects_prune_below_checkbox.setObjectName("FindObjectsOptionCheck")
+        self.find_objects_prune_below_checkbox.setVisible(False)
         self.find_objects_elements_only_checkbox = QtWidgets.QCheckBox("Elements only")
         self.find_objects_elements_only_checkbox.setObjectName("FindObjectsOptionCheck")
-        footer_actions.addWidget(self.find_objects_prune_below_checkbox, 0)
-        footer_actions.addWidget(self.find_objects_elements_only_checkbox, 0)
+        self.find_objects_elements_only_checkbox.setVisible(False)
+        self.find_objects_options_btn = QtWidgets.QToolButton(self.find_objects_action_footer)
+        self.find_objects_options_btn.setObjectName("FindObjectsOptionsBtn")
+        self.find_objects_options_btn.setText("⋯ Options")
+        self.find_objects_options_btn.setToolTip("Display options")
+        self.find_objects_options_btn.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        self.find_objects_options_btn.setAutoRaise(True)
+        self.find_objects_options_menu = QtWidgets.QMenu(self.find_objects_options_btn)
+        self.find_objects_options_menu.setObjectName("FindObjectsOptionsMenu")
+        self.find_objects_options_menu.setProperty("themeScope", "app")
+        self.find_objects_options_action_prune = self.find_objects_options_menu.addAction("Prune below result")
+        self.find_objects_options_action_prune.setCheckable(True)
+        self.find_objects_options_action_prune.toggled.connect(self.find_objects_prune_below_checkbox.setChecked)
+        self.find_objects_options_action_elements_only = self.find_objects_options_menu.addAction("Elements only")
+        self.find_objects_options_action_elements_only.setCheckable(True)
+        self.find_objects_options_action_elements_only.toggled.connect(self.find_objects_elements_only_checkbox.setChecked)
+        self.find_objects_options_btn.setMenu(self.find_objects_options_menu)
+        footer_actions.addWidget(self.find_objects_options_btn, 0)
         footer_actions.addStretch(1)
 
         self.find_objects_select_all_btn = QtWidgets.QPushButton("Select all")
@@ -6702,6 +6720,18 @@ class MainWindow(QtWidgets.QMainWindow):
             }}
             QToolButton#FindObjectsMoreMenuBtn:hover {{
                 border-color: rgba(148, 163, 184, 90);
+            }}
+            QToolButton#FindObjectsOptionsBtn {{
+                color: #94A3B8;
+                background: transparent;
+                border: none;
+                font-size: 11px;
+                padding: 2px 6px;
+            }}
+            QToolButton#FindObjectsOptionsBtn:hover {{
+                color: #CBD5E1;
+                background: rgba(148, 163, 184, 0.10);
+                border-radius: 5px;
             }}
             QFrame#FindObjectsActionFooter {{
                 background: transparent;
