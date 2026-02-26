@@ -2736,6 +2736,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._find_objects_group_counter = 0
         self._find_objects_groups: List[Dict[str, object]] = []
         self._find_objects_last_touched_group_id = 0
+        self._find_objects_panel_opened = False
         self._find_objects_recent_condition_descriptors: List[Dict[str, str]] = []
         self._find_objects_distinct_values_cache: Dict[str, List[str]] = {}
         self._find_objects_suggest_menu: Optional[QtWidgets.QMenu] = None
@@ -3124,6 +3125,23 @@ class MainWindow(QtWidgets.QMainWindow):
         scope_meta_row.addWidget(self.find_objects_add_filter_btn, 0)
         header_section.addLayout(scope_meta_row, 0)
         find_objects_layout.addWidget(self.find_objects_header_frame, 0)
+
+        # Empty start state — shown when there are no filters, no query, and scope is Everywhere.
+        self.find_objects_start_state_frame = QtWidgets.QFrame(self.find_objects_group)
+        self.find_objects_start_state_frame.setObjectName("FindObjectsStartState")
+        start_state_layout = QtWidgets.QVBoxLayout(self.find_objects_start_state_frame)
+        start_state_layout.setContentsMargins(16, 24, 16, 24)
+        start_state_layout.setSpacing(12)
+        start_state_layout.setAlignment(QtCore.Qt.AlignCenter)
+        self.find_objects_start_message = QtWidgets.QLabel("Start by adding a condition")
+        self.find_objects_start_message.setObjectName("FindObjectsStartMessage")
+        self.find_objects_start_message.setAlignment(QtCore.Qt.AlignCenter)
+        self.find_objects_start_cta_btn = QtWidgets.QPushButton("+ Add condition")
+        self.find_objects_start_cta_btn.setObjectName("FindObjectsStartCTA")
+        start_state_layout.addWidget(self.find_objects_start_message, 0, QtCore.Qt.AlignCenter)
+        start_state_layout.addWidget(self.find_objects_start_cta_btn, 0, QtCore.Qt.AlignCenter)
+        self.find_objects_start_state_frame.setVisible(True)
+        find_objects_layout.addWidget(self.find_objects_start_state_frame, 0)
 
         self.find_objects_advanced_toggle_btn = QtWidgets.QToolButton(self.find_objects_group)
         self.find_objects_advanced_toggle_btn.setObjectName("FindObjectsAdvancedToggle")
@@ -4535,6 +4553,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_search_edit.returnPressed.connect(self._on_find_objects_find_clicked)
         self.find_objects_suggest_btn.clicked.connect(self._on_find_objects_suggest_filters_clicked)
         self.find_objects_scope_condition_remove_btn.clicked.connect(self._on_find_objects_scope_condition_removed)
+        self.find_objects_start_cta_btn.clicked.connect(self._on_find_objects_add_filter_btn_clicked)
         self.find_objects_add_condition_btn.clicked.connect(self._on_find_objects_add_condition_clicked)
         self.find_objects_add_group_btn.clicked.connect(self._on_find_objects_add_group_clicked)
         self.find_objects_add_filter_btn.clicked.connect(self._on_find_objects_add_filter_btn_clicked)
@@ -6832,6 +6851,25 @@ class MainWindow(QtWidgets.QMainWindow):
                 font-size: 11px;
                 padding: 6px 10px;
                 border-radius: 10px;
+            }}
+            QFrame#FindObjectsStartState {{
+                background: transparent;
+                border: none;
+            }}
+            QLabel#FindObjectsStartMessage {{
+                color: #64748B;
+                font-size: 13px;
+            }}
+            QPushButton#FindObjectsStartCTA {{
+                color: #93C5FD;
+                background: transparent;
+                border: 1px solid rgba(147, 197, 253, 0.35);
+                border-radius: 6px;
+                padding: 6px 16px;
+                font-size: 12px;
+            }}
+            QPushButton#FindObjectsStartCTA:hover {{
+                background: rgba(147, 197, 253, 0.10);
             }}
             QFrame#FindObjectsResultsSection {{
                 background: rgba(15, 23, 38, 0.30);
@@ -11112,6 +11150,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_find_objects_scope_changed(self, _index: int) -> None:
         scope_key = str(self.find_objects_scope_combo.currentData() or "everywhere")
         self._set_find_objects_candidate_provider(scope_key)
+        self._update_find_objects_start_state()
         self.find_objects_scope_active.setText(f"Active: {self._find_objects_scope_label(self._find_objects_scope)}")
         if hasattr(self, "find_objects_results_scope_label"):
             self.find_objects_results_scope_label.setText(f"Scope: {self._find_objects_scope_label(self._find_objects_scope)}")
@@ -11134,6 +11173,25 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self.find_objects_scope_combo.setCurrentIndex(everywhere_index)
 
+    def _update_find_objects_start_state(self) -> None:
+        """Show the empty start state when there are no active inputs at all."""
+        if not hasattr(self, "find_objects_start_state_frame"):
+            return
+        has_query = bool(str(self.find_objects_search_edit.text() or "").strip())
+        has_active_conditions = any(
+            any(isinstance(r, ConditionRow) and r.is_active() for r in list(g.get("rows") or []))
+            for g in self._find_objects_groups
+        )
+        scope_everywhere = str(self._find_objects_scope or "").strip().lower() in {"everywhere", ""}
+        panel_opened = bool(getattr(self, "_find_objects_panel_opened", False))
+        show_start = not has_query and not has_active_conditions and scope_everywhere and not panel_opened
+        self.find_objects_start_state_frame.setVisible(show_start)
+        if show_start:
+            self.find_objects_advanced_frame.setVisible(False)
+            self.find_objects_results_frame.setVisible(False)
+        else:
+            self.find_objects_results_frame.setVisible(True)
+
     def _set_find_objects_advanced_visible(self, visible: bool) -> None:
         enabled = bool(visible)
         self.find_objects_advanced_frame.setVisible(enabled)
@@ -11144,6 +11202,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._set_find_objects_advanced_visible(bool(checked))
 
     def _refresh_find_objects_for_scope_change(self) -> None:
+        self._update_find_objects_start_state()
         self._update_find_objects_scope_selection_ui()
         self._update_find_objects_scope_count()
         self._update_find_objects_find_all_state()
@@ -11577,6 +11636,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._find_objects_condition_counter = 0
         self._find_objects_group_counter = 0
         self._find_objects_last_touched_group_id = 0
+        self._find_objects_panel_opened = False
         self._find_objects_has_run = False
         for widget in self.find_objects_groups_body.findChildren(QtWidgets.QWidget):
             if widget is self.find_objects_groups_body:
@@ -11904,6 +11964,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_find_objects_add_filter_btn_clicked(self, checked: bool = False) -> None:
         _ = checked
+        self._find_objects_panel_opened = True
         if hasattr(self, "find_objects_advanced_frame") and not self.find_objects_advanced_frame.isVisible():
             self._set_find_objects_advanced_visible(True)
         self._on_find_objects_add_condition_clicked()
@@ -11952,10 +12013,11 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_find_objects_condition_row_changed(self, group_id: int = 0) -> None:
         if int(group_id or 0) > 0:
             self._find_objects_last_touched_group_id = int(group_id)
+        self._schedule_find_objects_quick_preview()
         self._render_find_objects_filter_chips()
         self._update_find_objects_find_all_state()
         self._update_find_objects_footer_actions()
-        self._schedule_find_objects_quick_preview()
+        self._update_find_objects_start_state()
 
     def _build_find_objects_active_group(self, group: Dict[str, object]) -> Optional[Dict[str, object]]:
         rows = group.get("rows")
@@ -12691,6 +12753,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_find_objects_find_all_state()
         self._render_find_objects_filter_chips()
         self._update_find_objects_footer_actions()
+        self._update_find_objects_start_state()
         self._schedule_find_objects_quick_preview()
 
     def _run_find_objects_quick_preview(self) -> None:
@@ -12801,7 +12864,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if had_query:
             self.find_objects_search_edit.clear()
         self._find_objects_last_query = ""
+        self._find_objects_panel_opened = False
         self._update_find_objects_find_all_state()
+        self._update_find_objects_start_state()
         self._schedule_find_objects_live_search(immediate=True)
 
     def _build_find_objects_result_row(self, guid: str) -> Optional[Dict[str, str]]:
