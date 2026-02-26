@@ -399,3 +399,41 @@ def test_find_objects_filter_chips_are_removable():
     assert "QFrame#FindObjectsFilterChipFrame {" in source
     assert "QToolButton#FindObjectsChipRemoveBtn {" in source
     assert "QLabel#FindObjectsFilterChipLabel {" in source
+
+
+def test_find_objects_add_filter_editor_with_datatype_operators():
+    """'+ Add filter' button must exist in the header and ConditionRow must restrict
+    operator choices based on property datatype."""
+    main_src = Path("ui/main_window.py").read_text(encoding="utf-8")
+    condition_src = Path("ui/condition_row.py").read_text(encoding="utf-8")
+
+    # + Add filter button in the header
+    assert 'self.find_objects_add_filter_btn.setObjectName("FindObjectsAddFilterBtn")' in main_src
+    assert 'self.find_objects_add_filter_btn.setText("+ Add filter")' in main_src
+    assert "self.find_objects_add_filter_btn.clicked.connect(self._on_find_objects_add_filter_btn_clicked)" in main_src
+    assert "def _on_find_objects_add_filter_btn_clicked(self, checked: bool = False) -> None:" in main_src
+    assert "QToolButton#FindObjectsAddFilterBtn {" in main_src
+
+    # ConditionRow has kind-aware operator map
+    assert "_OPERATORS_FOR_KIND" in condition_src
+    # Number properties: comparison operators, no text operators
+    assert '"number":' in condition_src
+    assert '"greater_than"' in condition_src
+    assert '"less_than"' in condition_src
+    # String properties: text operators, no numeric comparisons
+    assert '"string":' in condition_src
+    assert '"contains"' in condition_src
+    assert '"starts_with"' in condition_src
+    # Boolean and enum are restricted
+    assert '"boolean":' in condition_src
+    assert '"enum":' in condition_src
+
+    # _update_operator_items method implements the filtering
+    assert "def _update_operator_items(self) -> None:" in condition_src
+    assert "self.operator_combo.blockSignals(True)" in condition_src
+    assert "self.operator_combo.clear()" in condition_src
+    assert "if key in allowed:" in condition_src
+    assert "self.operator_combo.blockSignals(False)" in condition_src
+
+    # _update_operator_items is called on property and category changes
+    assert "self._update_operator_items()" in condition_src

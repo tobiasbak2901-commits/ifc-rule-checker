@@ -59,6 +59,14 @@ class ConditionRow(QtWidgets.QFrame):
         "ai": "AI",
         "constraints": "Constraints",
     }
+    # Operator keys shown per property kind — subset of _OPERATORS keys.
+    _OPERATORS_FOR_KIND: Dict[str, List[str]] = {
+        "number":       ["equals", "greater_than", "less_than", "exists"],
+        "string":       ["contains", "starts_with", "ends_with", "equals", "in_list", "exists"],
+        "boolean":      ["equals", "exists"],
+        "enum":         ["equals", "in_list", "exists"],
+        "enum_dynamic": ["equals", "contains", "starts_with", "ends_with", "in_list", "exists"],
+    }
 
     def __init__(
         self,
@@ -181,6 +189,7 @@ class ConditionRow(QtWidgets.QFrame):
         self._default_category_key = str(self.category_combo.itemData(0) or "").strip()
         self._reload_properties_for_category(self._default_category_key)
         self._default_property_key = str(self.property_combo.itemData(0) or "").strip()
+        self._update_operator_items()
         self._default_operator_key = str(self.operator_combo.itemData(0) or "").strip()
 
         self.category_combo.currentIndexChanged.connect(self._on_category_changed)
@@ -265,6 +274,24 @@ class ConditionRow(QtWidgets.QFrame):
         self.property_combo.set_options(options, preserve_value=preserve_value)
         self.property_combo.blockSignals(False)
 
+    def _update_operator_items(self) -> None:
+        """Rebuild operator combo showing only operators appropriate for the current property kind."""
+        spec = self._property_spec()
+        kind = str(spec.get("kind") or "string").strip().lower()
+        allowed = set(self._OPERATORS_FOR_KIND.get(kind, [key for _, key in self._OPERATORS]))
+        current_op = self.operator_key()
+        self.operator_combo.blockSignals(True)
+        self.operator_combo.clear()
+        for label, key in self._OPERATORS:
+            if key in allowed:
+                self.operator_combo.addItem(label, key)
+        idx = self.operator_combo.findData(current_op)
+        if idx >= 0:
+            self.operator_combo.setCurrentIndex(idx)
+        elif self.operator_combo.count() > 0:
+            self.operator_combo.setCurrentIndex(0)
+        self.operator_combo.blockSignals(False)
+
     def _mark_user_interaction(self) -> None:
         if self._suppress_interaction_events:
             return
@@ -307,16 +334,19 @@ class ConditionRow(QtWidgets.QFrame):
         self._mark_user_interaction()
         selected_property = self.property_key()
         self._reload_properties_for_category(self.category_key(), preserve_property_key=selected_property)
+        self._update_operator_items()
         self._configure_value_editor()
         self.changed.emit()
 
     def _on_property_changed(self, _index: int) -> None:
         self._mark_user_interaction()
+        self._update_operator_items()
         self._configure_value_editor()
         self.changed.emit()
 
     def _on_property_text_changed(self, _text: str) -> None:
         self._mark_user_interaction()
+        self._update_operator_items()
         self._configure_value_editor()
         self.changed.emit()
 

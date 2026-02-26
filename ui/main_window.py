@@ -3107,6 +3107,13 @@ class MainWindow(QtWidgets.QMainWindow):
         scope_meta_row.addWidget(self.find_objects_selected_count, 0)
         scope_meta_row.addWidget(self.find_objects_scope_elements_count, 0)
         scope_meta_row.addStretch(1)
+        self.find_objects_add_filter_btn = QtWidgets.QToolButton(self.find_objects_header_frame)
+        self.find_objects_add_filter_btn.setObjectName("FindObjectsAddFilterBtn")
+        self.find_objects_add_filter_btn.setText("+ Add filter")
+        self.find_objects_add_filter_btn.setToolTip("Add a condition filter")
+        self.find_objects_add_filter_btn.setAutoRaise(True)
+        self.find_objects_add_filter_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        scope_meta_row.addWidget(self.find_objects_add_filter_btn, 0)
         header_section.addLayout(scope_meta_row, 0)
         find_objects_layout.addWidget(self.find_objects_header_frame, 0)
 
@@ -4496,6 +4503,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_scope_condition_remove_btn.clicked.connect(self._on_find_objects_scope_condition_removed)
         self.find_objects_add_condition_btn.clicked.connect(self._on_find_objects_add_condition_clicked)
         self.find_objects_add_group_btn.clicked.connect(self._on_find_objects_add_group_clicked)
+        self.find_objects_add_filter_btn.clicked.connect(self._on_find_objects_add_filter_btn_clicked)
         self.find_objects_more_action_clear.triggered.connect(self._on_find_objects_clear_clicked)
         self.find_objects_more_action_select_all.triggered.connect(self._on_find_objects_select_all_clicked)
         self.find_objects_more_action_isolate.triggered.connect(self._on_find_objects_isolate_clicked)
@@ -6645,6 +6653,18 @@ class MainWindow(QtWidgets.QMainWindow):
             QToolButton#FindObjectsChipRemoveBtn:hover {{
                 color: #F87171;
                 background: rgba(248, 113, 113, 0.12);
+            }}
+            QToolButton#FindObjectsAddFilterBtn {{
+                color: #93C5FD;
+                background: transparent;
+                border: none;
+                font-size: 11px;
+                padding: 2px 4px;
+            }}
+            QToolButton#FindObjectsAddFilterBtn:hover {{
+                color: #BFDBFE;
+                background: rgba(147, 197, 253, 0.08);
+                border-radius: 4px;
             }}
             QCheckBox#FindObjectsOptionCheck {{
                 color: #CBD5E1;
@@ -11809,6 +11829,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self._find_objects_last_touched_group_id = int(parent_group.get("id") or 0) if parent_group is not None else 0
         self._refresh_find_objects_group_headers()
         self._on_find_objects_condition_row_changed(group_id=self._find_objects_last_touched_group_id)
+
+    def _on_find_objects_add_filter_btn_clicked(self, checked: bool = False) -> None:
+        _ = checked
+        if hasattr(self, "find_objects_advanced_frame") and not self.find_objects_advanced_frame.isVisible():
+            self._set_find_objects_advanced_visible(True)
+        self._on_find_objects_add_condition_clicked()
 
     def _on_find_objects_add_condition_clicked(self, checked: bool = False, target_group_id: Optional[int] = None) -> None:
         _ = checked
