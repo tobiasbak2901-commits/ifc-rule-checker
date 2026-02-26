@@ -473,3 +473,27 @@ def test_find_objects_options_menu_declutters_toggles():
     # Theme overrides include the new menu name
     dropdowns = Path("ui/theme_overrides/dropdowns.qss").read_text(encoding="utf-8")
     assert 'QMenu#FindObjectsOptionsMenu[themeScope="app"]' in dropdowns
+
+
+def test_find_objects_results_polish_and_scope_header():
+    """Results section must show a compact 'Matches: X / Scope: <label>' header row
+    instead of the old stacked three-label layout.  Action buttons remain visible."""
+    source = Path("ui/main_window.py").read_text(encoding="utf-8")
+
+    # Legacy labels still exist (for behavior-code compatibility) but are hidden
+    assert 'self.find_objects_results_title = QtWidgets.QLabel("Results (0)")' in source
+    assert "self.find_objects_results_title.setVisible(False)" in source
+    assert 'self.find_objects_results_count_large = QtWidgets.QLabel("0 objects found")' in source
+    assert "self.find_objects_results_count_large.setVisible(False)" in source
+
+    # New scope label exists next to matches label in a horizontal results_header_row
+    assert 'self.find_objects_results_scope_label = QtWidgets.QLabel("Scope: Everywhere")' in source
+    assert 'self.find_objects_results_scope_label.setObjectName("FindObjectsResultsScopeLabel")' in source
+    assert "results_header_row.addWidget(self.find_objects_matches_label, 0)" in source
+    assert "results_header_row.addWidget(self.find_objects_results_scope_label, 0)" in source
+
+    # Scope label is updated when scope combo changes
+    assert 'self.find_objects_results_scope_label.setText(f"Scope: {self._find_objects_scope_label(self._find_objects_scope)}")' in source
+
+    # QSS for the scope label
+    assert "QLabel#FindObjectsResultsScopeLabel {" in source

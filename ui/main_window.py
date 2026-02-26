@@ -3220,14 +3220,21 @@ class MainWindow(QtWidgets.QMainWindow):
         results_section.setSpacing(8)
         self.find_objects_results_title = QtWidgets.QLabel("Results (0)")
         self.find_objects_results_title.setObjectName("SecondaryText")
-        results_section.addWidget(self.find_objects_results_title, 0)
+        self.find_objects_results_title.setVisible(False)
         self.find_objects_matches_label = QtWidgets.QLabel("Matches: 0")
         self.find_objects_matches_label.setObjectName("FindObjectsMatchesCount")
-        results_section.addWidget(self.find_objects_matches_label, 0)
-
         self.find_objects_results_count_large = QtWidgets.QLabel("0 objects found")
         self.find_objects_results_count_large.setObjectName("FindObjectsResultsCountLarge")
-        results_section.addWidget(self.find_objects_results_count_large, 0)
+        self.find_objects_results_count_large.setVisible(False)
+        self.find_objects_results_scope_label = QtWidgets.QLabel("Scope: Everywhere")
+        self.find_objects_results_scope_label.setObjectName("FindObjectsResultsScopeLabel")
+        results_header_row = QtWidgets.QHBoxLayout()
+        results_header_row.setContentsMargins(0, 0, 0, 0)
+        results_header_row.setSpacing(12)
+        results_header_row.addWidget(self.find_objects_matches_label, 0)
+        results_header_row.addStretch(1)
+        results_header_row.addWidget(self.find_objects_results_scope_label, 0)
+        results_section.addLayout(results_header_row, 0)
 
         self.find_objects_filter_chip_wrap = QtWidgets.QWidget(self.find_objects_group)
         self.find_objects_filter_chip_wrap.setObjectName("FindObjectsFilterChipWrap")
@@ -6828,6 +6835,10 @@ class MainWindow(QtWidgets.QMainWindow):
             }}
             QLabel#FindObjectsMatchesCount[invalid="true"] {{
                 color: #FCA5A5;
+            }}
+            QLabel#FindObjectsResultsScopeLabel {{
+                color: #64748B;
+                font-size: 11px;
             }}
             QTableView#FindObjectsResultsTable {{
                 background: rgba(8, 13, 24, 0.58);
@@ -11083,6 +11094,8 @@ class MainWindow(QtWidgets.QMainWindow):
         scope_key = str(self.find_objects_scope_combo.currentData() or "everywhere")
         self._set_find_objects_candidate_provider(scope_key)
         self.find_objects_scope_active.setText(f"Active: {self._find_objects_scope_label(self._find_objects_scope)}")
+        if hasattr(self, "find_objects_results_scope_label"):
+            self.find_objects_results_scope_label.setText(f"Scope: {self._find_objects_scope_label(self._find_objects_scope)}")
         self._update_find_objects_scope_selection_ui()
         self._update_find_objects_scope_count()
         self._update_find_objects_footer_actions()
@@ -12799,6 +12812,8 @@ class MainWindow(QtWidgets.QMainWindow):
         rows = [str(guid) for guid in list(result_ids or []) if str(guid).strip() and str(guid) in self.state.ifc_index]
         self.find_objects_results_title.setText(f"Results ({len(rows)})")
         self.find_objects_results_count_large.setText(f"{len(rows)} objects found")
+        if hasattr(self, "find_objects_results_scope_label"):
+            self.find_objects_results_scope_label.setText(f"Scope: {self._find_objects_scope_label(self._find_objects_scope)}")
         has_results = bool(rows)
         self.find_objects_select_all_btn.setEnabled(has_results)
         self.find_objects_isolate_btn.setEnabled(has_results)
