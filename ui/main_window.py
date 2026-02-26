@@ -11533,7 +11533,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _schedule_find_objects_quick_preview(self) -> None:
         self._find_objects_debounce_mode = "preview"
-        self._find_objects_debounce_timer.setInterval(300)
+        self._find_objects_debounce_timer.setInterval(250)
         self._find_objects_debounce_timer.stop()
         self._find_objects_debounce_timer.start()
 
@@ -11918,7 +11918,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._find_objects_last_touched_group_id = int(group_id)
         self._refresh_find_objects_group_headers()
         self._render_find_objects_filter_chips()
-        self._schedule_find_objects_live_search()
+        self._schedule_find_objects_quick_preview()
 
     def _on_find_objects_condition_row_changed(self, group_id: int = 0) -> None:
         if int(group_id or 0) > 0:
@@ -11926,7 +11926,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._render_find_objects_filter_chips()
         self._update_find_objects_find_all_state()
         self._update_find_objects_footer_actions()
-        self._schedule_find_objects_live_search()
+        self._schedule_find_objects_quick_preview()
 
     def _build_find_objects_active_group(self, group: Dict[str, object]) -> Optional[Dict[str, object]]:
         rows = group.get("rows")
@@ -12668,28 +12668,29 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._find_objects_scope_uses_current_selection() and not self._find_objects_scope_has_selection():
             self._update_find_objects_matches_preview(0)
             return
+        if not self._validate_find_objects_conditions():
+            self._update_find_objects_matches_preview(None, invalid=True)
+            return
         query = str(self.find_objects_search_edit.text() or "").strip()
         groups = self._find_objects_active_condition_groups()
-        if not query:
-            if not groups:
-                # Scope-only: preview candidate count for any scope (everywhere included).
-                candidates = self._find_objects_candidate_ids()
-                self._update_find_objects_matches_preview(len(candidates))
-            return
-        # Keep pause-preview lightweight: only preview simple quick-search scans.
-        if groups:
+        if not query and not groups:
+            # Scope-only: preview candidate count for any scope (everywhere included).
+            candidates = self._find_objects_candidate_ids()
+            self._update_find_objects_matches_preview(len(candidates))
             return
         candidates = self._find_objects_candidate_ids()
         if len(candidates) > 12000:
             return
-        tokens = self._find_objects_query_tokens(query)
-        if not tokens:
-            self._update_find_objects_matches_preview(0)
-            return
+        tokens = self._find_objects_query_tokens(query) if query else []
         count = 0
         for guid in candidates:
-            if self._find_objects_query_matches_guid(guid, tokens, query):
-                count += 1
+            if query and not self._find_objects_query_matches_guid(guid, tokens, query):
+                continue
+            if groups:
+                elem = self.state.ifc_index.get(guid)
+                if elem is None or not self._find_objects_match_condition_groups(elem, groups):
+                    continue
+            count += 1
         self._update_find_objects_matches_preview(count)
 
     def _run_find_objects_live_search(self) -> None:

@@ -534,12 +534,40 @@ class ConditionRow(QtWidgets.QFrame):
             return True
         return bool(self.value_text())
 
+    @staticmethod
+    def _parse_numeric_shorthand(text: str) -> Optional[tuple[str, str]]:
+        """Parse '<100', '<=200', '>50', '>=75' → (operator_key, numeric_value_str).
+
+        Both strict and non-strict inequalities map to the available greater_than /
+        less_than operators.  Returns None if the text does not start with a recognised
+        prefix or if the numeric portion is not a valid number.
+        """
+        text = text.strip()
+        for prefix, op in (("<=", "less_than"), ("<", "less_than"), (">=", "greater_than"), (">", "greater_than")):
+            if text.startswith(prefix):
+                rest = text[len(prefix):].strip()
+                try:
+                    float(rest)
+                    return (op, rest)
+                except ValueError:
+                    return None
+        return None
+
     def descriptor(self) -> Dict[str, str]:
+        prop = self.property_key()
+        op = self.operator_key()
+        value = self.value_text()
+        spec = self._property_spec()
+        kind = str(spec.get("kind") or "string").strip().lower()
+        if kind == "number" and value:
+            parsed = self._parse_numeric_shorthand(value)
+            if parsed is not None:
+                op, value = parsed
         return {
             "category": self.category_key(),
-            "property": self.property_key(),
-            "operator": self.operator_key(),
-            "value": self.value_text(),
+            "property": prop,
+            "operator": op,
+            "value": value,
         }
 
     def chip_text(self) -> str:

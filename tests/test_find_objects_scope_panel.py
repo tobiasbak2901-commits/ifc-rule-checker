@@ -497,3 +497,39 @@ def test_find_objects_results_polish_and_scope_header():
 
     # QSS for the scope label
     assert "QLabel#FindObjectsResultsScopeLabel {" in source
+
+
+def test_find_objects_debounce_preview_and_smart_parsing():
+    """Match count must update automatically (250 ms debounce preview) on any input
+    change; explicit Find all populates the table.  Numeric filter values that start
+    with <, <=, >, >= must be auto-parsed into the correct operator + bare number."""
+    main_src = Path("ui/main_window.py").read_text(encoding="utf-8")
+    condition_src = Path("ui/condition_row.py").read_text(encoding="utf-8")
+
+    # Debounce interval is 250 ms for the preview path
+    assert "self._find_objects_debounce_timer.setInterval(250)" in main_src
+
+    # Condition row changes and logic toggles trigger preview, not live search
+    assert "def _on_find_objects_condition_row_changed" in main_src
+    # The method must call _schedule_find_objects_quick_preview (not live search)
+    cond_changed_block = main_src[
+        main_src.index("def _on_find_objects_condition_row_changed"):
+        main_src.index("def _on_find_objects_condition_row_changed") + 400
+    ]
+    assert "_schedule_find_objects_quick_preview()" in cond_changed_block
+
+    # Preview now handles conditions (not just search-only)
+    assert "def _run_find_objects_quick_preview(" in main_src
+    assert "self._find_objects_match_condition_groups(elem, groups)" in main_src
+
+    # _parse_numeric_shorthand static method exists in ConditionRow
+    assert "def _parse_numeric_shorthand(" in condition_src
+    assert '"<="' in condition_src or "'<='" in condition_src
+    assert '"less_than"' in condition_src
+    assert '">=", "greater_than"' in condition_src or "'>='," in condition_src
+    assert "float(rest)" in condition_src
+
+    # descriptor() applies the shorthand for numeric properties
+    assert "parsed = self._parse_numeric_shorthand(value)" in condition_src
+    assert 'kind == "number"' in condition_src
+    assert "op, value = parsed" in condition_src
