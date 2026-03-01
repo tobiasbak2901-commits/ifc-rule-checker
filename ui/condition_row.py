@@ -355,6 +355,27 @@ class ConditionRow(QtWidgets.QFrame):
         self._progressive_step = max(self._PROGRESSIVE_STEP_ITEM, min(self._PROGRESSIVE_STEP_VALUE, normalized))
         self._apply_progressive_visibility()
 
+    def set_progressive_enabled(self, enabled: bool) -> None:
+        self._progressive_enabled = bool(enabled)
+        self._progressive_collapsed = False
+        if self._progressive_enabled:
+            self._apply_progressive_visibility()
+            return
+        # Non-progressive mode: show the full editor row (Category | Property | Operation | Value).
+        self.category_combo.setVisible(True)
+        self.item_chip_frame.setVisible(False)
+        self.property_combo.setVisible(True)
+        self.property_chip_frame.setVisible(False)
+        self.operator_combo.setVisible(True)
+        self.operator_chip_frame.setVisible(False)
+        self.value_wrap.setVisible(True)
+        self.value_chip_frame.setVisible(False)
+        self.item_chip_edit_btn.setVisible(False)
+        self.property_chip_edit_btn.setVisible(False)
+        self.operator_chip_edit_btn.setVisible(False)
+        self.row_edit_btn.setVisible(False)
+        self.settings_btn.setVisible(False)
+
     def _edit_progressive_item(self) -> None:
         self.set_progressive_step(self._PROGRESSIVE_STEP_ITEM)
         self.focus_first_step()

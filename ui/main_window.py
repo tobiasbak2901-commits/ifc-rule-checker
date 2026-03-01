@@ -2740,6 +2740,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._find_objects_recent_condition_descriptors: List[Dict[str, str]] = []
         self._find_objects_distinct_values_cache: Dict[str, List[str]] = {}
         self._find_objects_suggest_menu: Optional[QtWidgets.QMenu] = None
+        self._find_objects_active_editor: Optional[Dict[str, object]] = None
         self._find_objects_debounce_mode = "search"
         self._find_objects_debounce_timer = QtCore.QTimer(self)
         self._find_objects_debounce_timer.setSingleShot(True)
@@ -10915,30 +10916,16 @@ class MainWindow(QtWidgets.QMainWindow):
         origin = self.find_objects_suggest_btn.mapToGlobal(QtCore.QPoint(0, self.find_objects_suggest_btn.height() + 4))
         menu.popup(origin)
 
-    def _find_objects_suggestion_target_row(self) -> Optional[ConditionRow]:
+    def _find_objects_target_group(self, target_group_id: Optional[int] = None) -> Dict[str, object]:
         if not self._find_objects_groups:
-            self._create_find_objects_group(add_initial_condition=False)
-        if not self._find_objects_groups:
-            return None
-        group = self._find_objects_groups[0]
-        rows = group.get("rows")
-        if isinstance(rows, list):
-            for row in rows:
-                if not isinstance(row, ConditionRow):
-                    continue
-                default_property = str(getattr(row, "_default_property_key", "") or "")
-                default_operator = str(getattr(row, "_default_operator_key", "") or "")
-                if row.value_text():
-                    continue
-                if row.property_key() == default_property and row.operator_key() == default_operator:
-                    return row
-        self._add_find_objects_condition_row(group)
-        rows = group.get("rows")
-        if isinstance(rows, list):
-            for row in reversed(rows):
-                if isinstance(row, ConditionRow):
-                    return row
-        return None
+            return self._create_find_objects_group(add_initial_condition=False)
+        wanted_id = int(target_group_id or self._find_objects_last_touched_group_id or 0)
+        group = self._find_objects_group_by_id(wanted_id) if wanted_id > 0 else None
+        if group is None and self._find_objects_groups:
+            group = self._find_objects_groups[-1]
+        if group is None:
+            group = self._create_find_objects_group(add_initial_condition=False)
+        return group
 
     def _populate_find_objects_condition_row(self, row: ConditionRow, descriptor: Mapping[str, str]) -> None:
         property_key = str(descriptor.get("property") or "").strip()
@@ -10979,10 +10966,8 @@ class MainWindow(QtWidgets.QMainWindow):
         }
         if not descriptor["property"] or not descriptor["operator"]:
             return
-        target_row = self._find_objects_suggestion_target_row()
-        if target_row is None:
-            return
-        self._populate_find_objects_condition_row(target_row, descriptor)
+        group = self._find_objects_target_group()
+        self._add_find_objects_condition_descriptor(group, descriptor)
         self._remember_find_objects_condition_descriptors([descriptor])
         self._on_find_objects_condition_row_changed()
 
@@ -11679,12 +11664,21 @@ class MainWindow(QtWidgets.QMainWindow):
         query = str(self.find_objects_search_edit.text() or "").strip()
         if query:
             return True
-        for row in self._find_objects_condition_rows():
-            if not row.is_active():
+        for group in list(getattr(self, "_find_objects_groups", []) or []):
+            conditions = group.get("conditions") if isinstance(group, dict) else None
+            if not isinstance(conditions, list):
                 continue
-            if row.has_missing_required_value():
-                continue
-            return True
+            for condition in list(conditions):
+                if not isinstance(condition, Mapping):
+                    continue
+                prop = str(condition.get("property") or "").strip()
+                op = str(condition.get("operator") or "").strip()
+                value = str(condition.get("value") or "").strip()
+                if not prop or not op:
+                    continue
+                if op != "exists" and not value:
+                    continue
+                return True
         # Any non-everywhere scope is itself an active filter — it restricts candidates
         # to a subset (selected nodes, search set, etc.) without requiring extra conditions.
         scope_key = str(self._find_objects_scope or "").strip().lower()
@@ -11721,23 +11715,28 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _find_objects_condition_rows(self) -> List[ConditionRow]:
         rows: List[ConditionRow] = []
-        for group in self._find_objects_groups:
-            group_rows = group.get("rows")
-            if not isinstance(group_rows, list):
-                continue
-            for row in group_rows:
-                if isinstance(row, ConditionRow):
-                    rows.append(row)
+        editor = getattr(self, "_find_objects_active_editor", None)
+        if isinstance(editor, dict):
+            row = editor.get("row")
+            if isinstance(row, ConditionRow):
+                rows.append(row)
         return rows
 
     def _validate_find_objects_conditions(self) -> bool:
-        has_errors = False
-        for row in self._find_objects_condition_rows():
-            missing_value = row.has_missing_required_value()
-            row.set_value_invalid(missing_value)
-            if missing_value:
-                has_errors = True
-        return not has_errors
+        for group in list(getattr(self, "_find_objects_groups", []) or []):
+            if not isinstance(group, dict):
+                continue
+            for condition in list(group.get("conditions") or []):
+                if not isinstance(condition, Mapping):
+                    continue
+                prop = str(condition.get("property") or "").strip()
+                op = str(condition.get("operator") or "").strip()
+                value = str(condition.get("value") or "").strip()
+                if not prop or not op:
+                    return False
+                if op != "exists" and not value:
+                    return False
+        return True
 
     def _schedule_find_objects_live_search(self, *, immediate: bool = False) -> None:
         self._find_objects_debounce_mode = "search"
@@ -11767,6 +11766,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._find_objects_last_touched_group_id = 0
         self._find_objects_panel_opened = False
         self._find_objects_has_run = False
+        self._find_objects_active_editor = None
         self._find_objects_match_logic = "and"
         if hasattr(self, "find_objects_match_all_btn") and hasattr(self, "find_objects_match_any_btn"):
             self.find_objects_match_all_btn.blockSignals(True)
@@ -11870,6 +11870,7 @@ class MainWindow(QtWidgets.QMainWindow):
         add_group_btn.setToolTip("Add nested group")
         add_group_btn.setAutoRaise(True)
         add_group_btn.setVisible(False)
+        add_condition_btn.setVisible(False)
 
         remove_group_btn = QtWidgets.QToolButton(frame)
         remove_group_btn.setObjectName("FindObjectsGroupRemoveBtn")
@@ -11913,7 +11914,8 @@ class MainWindow(QtWidgets.QMainWindow):
             "add_group_btn": add_group_btn,
             "rows_layout": rows_layout,
             "children_layout": children_layout,
-            "rows": [],
+            "conditions": [],
+            "condition_blocks": [],
             "children": [],
         }
         logic_and_btn.toggled.connect(lambda checked, gid=group_id: self._on_find_objects_group_logic_toggled(gid, "and", checked))
@@ -11935,7 +11937,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._find_objects_groups.append(group)
         self._find_objects_last_touched_group_id = int(group_id)
         if add_initial_condition:
-            self._add_find_objects_condition_row(group)
+            self._open_find_objects_condition_editor(group)
         self._refresh_find_objects_group_headers()
         return group
 
@@ -12015,52 +12017,188 @@ class MainWindow(QtWidgets.QMainWindow):
                 total_groups=total_groups,
             )
 
-    def _add_find_objects_condition_row(self, group: Dict[str, object]) -> None:
+    def _close_find_objects_condition_editor(self) -> None:
+        editor = getattr(self, "_find_objects_active_editor", None)
+        if not isinstance(editor, dict):
+            self._find_objects_active_editor = None
+            return
+        widget = editor.get("widget")
+        if isinstance(widget, QtWidgets.QWidget):
+            widget.setParent(None)
+            widget.deleteLater()
+        self._find_objects_active_editor = None
+
+    def _open_find_objects_condition_editor(
+        self,
+        group: Dict[str, object],
+        *,
+        preset: Optional[Mapping[str, str]] = None,
+    ) -> None:
+        if not isinstance(group, dict):
+            return
+        if isinstance(getattr(self, "_find_objects_active_editor", None), dict):
+            return
         rows_layout = group.get("rows_layout")
         if not isinstance(rows_layout, QtWidgets.QVBoxLayout):
             return
         group_id = int(group.get("id") or 0)
+
+        editor_frame = QtWidgets.QFrame(self.find_objects_groups_body)
+        editor_frame.setObjectName("FindObjectsConditionEditor")
+        editor_layout = QtWidgets.QVBoxLayout(editor_frame)
+        editor_layout.setContentsMargins(0, 0, 0, 0)
+        editor_layout.setSpacing(6)
+
         row = ConditionRow(
             self._find_objects_property_options(),
-            self.find_objects_groups_body,
+            editor_frame,
             distinct_values_provider=self._find_objects_distinct_values_for_property,
         )
-        row.changed.connect(lambda gid=group_id: self._on_find_objects_condition_row_changed(group_id=gid))
-        row.removeRequested.connect(self._remove_find_objects_condition_row)
-        rows_layout.addWidget(row, 0)
-        row.focus_first_step()
-        rows = group.get("rows")
-        if isinstance(rows, list):
-            rows.append(row)
-        self._find_objects_condition_counter += 1
+        row.set_progressive_enabled(False)
+        row.settings_btn.setVisible(False)
+        row.reset_btn.setVisible(False)
+        row.remove_btn.setVisible(False)
+        editor_layout.addWidget(row, 0)
+
+        actions_row = QtWidgets.QHBoxLayout()
+        actions_row.setContentsMargins(0, 0, 0, 0)
+        actions_row.setSpacing(8)
+        actions_row.addStretch(1)
+        cancel_btn = QtWidgets.QPushButton("Cancel", editor_frame)
+        cancel_btn.setObjectName("FindObjectsConditionEditorCancel")
+        confirm_btn = QtWidgets.QPushButton("Add", editor_frame)
+        confirm_btn.setObjectName("FindObjectsConditionEditorConfirm")
+        confirm_btn.setEnabled(False)
+        actions_row.addWidget(cancel_btn, 0)
+        actions_row.addWidget(confirm_btn, 0)
+        editor_layout.addLayout(actions_row, 0)
+
+        def sync_confirm_state() -> None:
+            confirm_btn.setEnabled(bool(row.is_active()))
+
+        row.changed.connect(sync_confirm_state)
+        cancel_btn.clicked.connect(self._close_find_objects_condition_editor)
+        confirm_btn.clicked.connect(self._commit_find_objects_condition_editor)
+
+        rows_layout.addWidget(editor_frame, 0)
+        self._find_objects_active_editor = {
+            "group_id": int(group_id),
+            "widget": editor_frame,
+            "row": row,
+            "confirm_btn": confirm_btn,
+        }
         self._find_objects_last_touched_group_id = int(group_id)
-        self._refresh_find_objects_group_headers()
+        if preset is not None:
+            self._populate_find_objects_condition_row(row, preset)
+        sync_confirm_state()
+        row.focus_first_step()
 
-    def _group_for_condition_row(self, target_row: ConditionRow) -> Optional[Dict[str, object]]:
-        for group in self._find_objects_groups:
-            rows = group.get("rows")
-            if isinstance(rows, list) and target_row in rows:
-                return group
-        return None
-
-    def _remove_find_objects_condition_row(self, row_obj: object) -> None:
-        if not isinstance(row_obj, ConditionRow):
+    def _commit_find_objects_condition_editor(self) -> None:
+        editor = getattr(self, "_find_objects_active_editor", None)
+        if not isinstance(editor, dict):
             return
-        group = self._group_for_condition_row(row_obj)
+        group_id = int(editor.get("group_id") or 0)
+        row = editor.get("row")
+        if not isinstance(row, ConditionRow):
+            self._close_find_objects_condition_editor()
+            return
+        if not row.is_active():
+            row.set_value_invalid(row.has_missing_required_value())
+            return
+        descriptor = row.descriptor()
+        group = self._find_objects_group_by_id(group_id)
+        if group is None:
+            self._close_find_objects_condition_editor()
+            return
+        self._close_find_objects_condition_editor()
+        self._add_find_objects_condition_descriptor(group, descriptor)
+        self._remember_find_objects_condition_descriptors([descriptor])
+        self._on_find_objects_condition_row_changed(group_id=group_id)
+
+    def _find_objects_condition_block_text(self, descriptor: Mapping[str, object]) -> str:
+        prop_key = str(descriptor.get("property") or "").strip()
+        op_key = str(descriptor.get("operator") or "").strip()
+        value = str(descriptor.get("value") or "").strip()
+        prop = self._find_objects_property_label(prop_key) if prop_key else ""
+        op = op_key.replace("_", " ")
+        if op_key == "exists":
+            return f"{prop} {op}".strip()
+        return f"{prop} {op} {value}".strip()
+
+    def _add_find_objects_condition_descriptor(self, group: Dict[str, object], descriptor: Mapping[str, object]) -> None:
+        if not isinstance(group, dict):
+            return
+        prop = str(descriptor.get("property") or "").strip()
+        op = str(descriptor.get("operator") or "").strip()
+        value = str(descriptor.get("value") or "").strip()
+        if not prop or not op:
+            return
+        if op != "exists" and not value:
+            return
+        conditions = group.get("conditions")
+        if not isinstance(conditions, list):
+            conditions = []
+            group["conditions"] = conditions
+        condition = dict(descriptor)
+        conditions.append(condition)
+
+        rows_layout = group.get("rows_layout")
+        if not isinstance(rows_layout, QtWidgets.QVBoxLayout):
+            return
+        group_id = int(group.get("id") or 0)
+
+        block = QtWidgets.QFrame(self.find_objects_groups_body)
+        block.setObjectName("FindObjectsConditionBlock")
+        block_layout = QtWidgets.QHBoxLayout(block)
+        block_layout.setContentsMargins(8, 6, 8, 6)
+        block_layout.setSpacing(8)
+        label = QtWidgets.QLabel(self._find_objects_condition_block_text(condition), block)
+        label.setObjectName("FindObjectsConditionBlockLabel")
+        label.setWordWrap(True)
+        remove_btn = QtWidgets.QToolButton(block)
+        remove_btn.setObjectName("FindObjectsConditionBlockRemove")
+        remove_btn.setText("X")
+        remove_btn.setAutoRaise(True)
+        remove_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        remove_btn.setToolTip("Remove condition")
+        remove_btn.clicked.connect(lambda _checked=False, gid=group_id, desc=condition: self._remove_find_objects_condition_descriptor(gid, desc))
+        block_layout.addWidget(label, 1)
+        block_layout.addWidget(remove_btn, 0, QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+
+        blocks = group.get("condition_blocks")
+        if not isinstance(blocks, list):
+            blocks = []
+            group["condition_blocks"] = blocks
+        blocks.append({"descriptor": condition, "widget": block})
+        rows_layout.addWidget(block, 0)
+        self._find_objects_last_touched_group_id = int(group_id)
+
+    def _remove_find_objects_condition_descriptor(self, group_id: int, descriptor: Mapping[str, object]) -> None:
+        group = self._find_objects_group_by_id(int(group_id or 0))
         if group is None:
             return
-        rows = group.get("rows")
-        rows_layout = group.get("rows_layout")
-        if isinstance(rows, list) and row_obj in rows:
-            rows.remove(row_obj)
-        if isinstance(rows_layout, QtWidgets.QVBoxLayout):
-            rows_layout.removeWidget(row_obj)
-        row_obj.deleteLater()
+        conditions = group.get("conditions")
+        if isinstance(conditions, list):
+            for idx, row in enumerate(list(conditions)):
+                if row is descriptor:
+                    conditions.pop(idx)
+                    break
+        blocks = group.get("condition_blocks")
+        if isinstance(blocks, list):
+            for entry in list(blocks):
+                if not isinstance(entry, dict):
+                    continue
+                if entry.get("descriptor") is descriptor:
+                    widget = entry.get("widget")
+                    if isinstance(widget, QtWidgets.QWidget):
+                        widget.setParent(None)
+                        widget.deleteLater()
+                    blocks.remove(entry)
+                    break
         child_groups = self._find_objects_group_children(group)
-        if isinstance(rows, list) and (not rows) and (not child_groups):
-            if len(self._find_objects_groups) > 1:
-                self._remove_find_objects_group(int(group.get("id") or 0))
-        self._refresh_find_objects_group_headers()
+        if (not list(group.get("conditions") or [])) and (not child_groups) and len(self._find_objects_groups) > 1:
+            self._remove_find_objects_group(int(group.get("id") or 0))
+            return
         self._on_find_objects_condition_row_changed(group_id=int(group.get("id") or 0))
 
     def _remove_find_objects_group(self, group_id: int, *, force: bool = False) -> None:
@@ -12079,12 +12217,19 @@ class MainWindow(QtWidgets.QMainWindow):
                 parent_group["children"] = [int(value) for value in siblings if int(value or 0) != int(group_id or 0)]
 
         frame = target.get("frame")
-        rows = target.get("rows")
-        if isinstance(rows, list):
-            for row in list(rows):
-                if isinstance(row, QtWidgets.QWidget):
-                    row.deleteLater()
-            rows.clear()
+        editor = getattr(self, "_find_objects_active_editor", None)
+        if isinstance(editor, dict) and int(editor.get("group_id") or 0) == int(group_id or 0):
+            self._close_find_objects_condition_editor()
+        blocks = target.get("condition_blocks")
+        if isinstance(blocks, list):
+            for entry in list(blocks):
+                widget = entry.get("widget") if isinstance(entry, dict) else None
+                if isinstance(widget, QtWidgets.QWidget):
+                    widget.deleteLater()
+            blocks.clear()
+        conditions = target.get("conditions")
+        if isinstance(conditions, list):
+            conditions.clear()
         if isinstance(frame, QtWidgets.QWidget):
             if parent_group is not None:
                 parent_layout = parent_group.get("children_layout")
@@ -12110,17 +12255,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_find_objects_add_condition_clicked(self, checked: bool = False, target_group_id: Optional[int] = None) -> None:
         _ = checked
-        if not self._find_objects_groups:
-            self._create_find_objects_group(add_initial_condition=False)
-        group = None
-        wanted_id = int(target_group_id or self._find_objects_last_touched_group_id or 0)
-        if wanted_id > 0:
-            group = self._find_objects_group_by_id(wanted_id)
-        if group is None and self._find_objects_groups:
-            group = self._find_objects_groups[-1]
-        if group is None:
-            group = self._create_find_objects_group(add_initial_condition=False)
-        self._add_find_objects_condition_row(group)
+        editor = getattr(self, "_find_objects_active_editor", None)
+        if isinstance(editor, dict):
+            row = editor.get("row")
+            if isinstance(row, ConditionRow):
+                row.focus_first_step()
+            return
+        group = self._find_objects_target_group(target_group_id)
+        self._open_find_objects_condition_editor(group)
         self._on_find_objects_condition_row_changed(group_id=int(group.get("id") or 0))
 
     def _on_find_objects_add_group_clicked(self, checked: bool = False, parent_group_id: Optional[int] = None) -> None:
@@ -12192,15 +12334,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_find_objects_start_state()
 
     def _build_find_objects_active_group(self, group: Dict[str, object]) -> Optional[Dict[str, object]]:
-        rows = group.get("rows")
         descriptors: List[Dict[str, str]] = []
-        if isinstance(rows, list):
-            for row in rows:
-                if not isinstance(row, ConditionRow):
+        conditions = group.get("conditions")
+        if isinstance(conditions, list):
+            for condition in list(conditions):
+                if not isinstance(condition, Mapping):
                     continue
-                if not row.is_active():
+                prop = str(condition.get("property") or "").strip()
+                op = str(condition.get("operator") or "").strip()
+                value = str(condition.get("value") or "").strip()
+                if not prop or not op:
                     continue
-                descriptors.append(row.descriptor())
+                if op != "exists" and not value:
+                    continue
+                descriptors.append({str(k): str(v) for k, v in dict(condition).items() if v is not None})
 
         children_payload: List[Dict[str, object]] = []
         for child in self._find_objects_group_children(group):
@@ -12326,15 +12473,24 @@ class MainWindow(QtWidgets.QMainWindow):
         path: List[int],
     ) -> None:
         path_label = "G" + ".".join(str(v) for v in path)
-        for row in list(group.get("rows") or []):
-            if not isinstance(row, ConditionRow) or not row.is_active():
+        group_id = int(group.get("id") or 0)
+        for condition in list(group.get("conditions") or []):
+            if not isinstance(condition, Mapping):
                 continue
-            desc = row.descriptor()
-            prop = str(desc.get("property") or "").replace("_", " ").title()
-            op = str(desc.get("operator") or "").replace("_", " ")
-            value = str(desc.get("value") or "")
-            text = f"{prop} {op}" if op == "exists" else f"{prop} {op} {value}".strip()
-            chips.append((f"{path_label}: {text}", lambda r=row: self._remove_find_objects_condition_row(r)))
+            prop_key = str(condition.get("property") or "").strip()
+            op_key = str(condition.get("operator") or "").strip()
+            value = str(condition.get("value") or "").strip()
+            if not prop_key or not op_key:
+                continue
+            if op_key != "exists" and not value:
+                continue
+            prop = prop_key.replace("_", " ").title()
+            op = op_key.replace("_", " ")
+            text = f"{prop} {op}" if op_key == "exists" else f"{prop} {op} {value}".strip()
+            chips.append((
+                f"{path_label}: {text}",
+                lambda gid=group_id, desc=condition: self._remove_find_objects_condition_descriptor(gid, desc),
+            ))
         for child_index, child in enumerate(self._find_objects_group_children(group), start=1):
             self._collect_find_objects_condition_chip_data(chips, child, [*path, child_index])
 

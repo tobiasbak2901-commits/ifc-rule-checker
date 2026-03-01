@@ -390,8 +390,8 @@ def test_find_objects_filter_chips_are_removable():
     assert "self.find_objects_search_edit.clear" in source
     # Scope chip: resets combo to everywhere index
     assert "self.find_objects_scope_combo.setCurrentIndex(idx)" in source
-    # Condition chip: calls _remove_find_objects_condition_row with captured row
-    assert "self._remove_find_objects_condition_row(r)" in source
+    # Condition chip: remove is wired back into the Find Objects condition model
+    assert "_remove_find_objects_condition_descriptor" in source
     # Chip wrap visibility is driven by _render_find_objects_filter_chips itself
     assert "self.find_objects_filter_chip_wrap.setVisible(True)" in source
     assert "self.find_objects_filter_chip_wrap.setVisible(False)" in source
