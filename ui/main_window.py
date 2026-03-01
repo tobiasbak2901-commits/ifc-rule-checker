@@ -6643,6 +6643,52 @@ class MainWindow(QtWidgets.QMainWindow):
             QPushButton#FindObjectsInlineAction:pressed {{
                 color: #FCE7F3;
             }}
+            QFrame#FindObjectsRuleBlock {{
+                background: rgba(15, 23, 38, 0.72);
+                border: 1px solid rgba(148, 163, 184, 44);
+                border-radius: 8px;
+            }}
+            QLabel#FindObjectsRuleBlockCategory {{
+                color: #94A3B8;
+                font-size: 10px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.4px;
+            }}
+            QLabel#FindObjectsRuleBlockProperty {{
+                color: #E2E8F0;
+                font-size: 11px;
+                font-weight: 600;
+            }}
+            QLabel#FindObjectsRuleBlockOperator {{
+                color: #CBD5E1;
+                font-size: 11px;
+            }}
+            QLabel#FindObjectsRuleBlockValue {{
+                color: #E2E8F0;
+                font-size: 11px;
+            }}
+            QToolButton#FindObjectsRuleBlockEdit,
+            QToolButton#FindObjectsRuleBlockRemove {{
+                background: transparent;
+                color: rgba(203, 213, 225, 0.75);
+                border: none;
+                min-width: 18px;
+                min-height: 18px;
+                max-width: 18px;
+                max-height: 18px;
+                border-radius: 8px;
+                font-size: 11px;
+                font-weight: 700;
+            }}
+            QToolButton#FindObjectsRuleBlockEdit:hover {{
+                background: rgba(148, 163, 184, 0.12);
+                color: #E2E8F0;
+            }}
+            QToolButton#FindObjectsRuleBlockRemove:hover {{
+                background: rgba(248, 113, 113, 0.16);
+                color: #FCA5A5;
+            }}
             QFrame#FindObjectsConditionRow {{
                 background: transparent;
                 border: none;
@@ -10928,9 +10974,14 @@ class MainWindow(QtWidgets.QMainWindow):
         return group
 
     def _populate_find_objects_condition_row(self, row: ConditionRow, descriptor: Mapping[str, str]) -> None:
+        category_key = str(descriptor.get("category") or "").strip()
         property_key = str(descriptor.get("property") or "").strip()
         operator_key = str(descriptor.get("operator") or "").strip()
         value_text = str(descriptor.get("value") or "").strip()
+        if category_key and hasattr(row, "category_combo"):
+            category_index = row.category_combo.findData(category_key)
+            if category_index >= 0:
+                row.category_combo.setCurrentIndex(category_index)
         if property_key:
             property_index = row.property_combo.findData(property_key)
             if property_index >= 0:
@@ -12033,6 +12084,8 @@ class MainWindow(QtWidgets.QMainWindow):
         group: Dict[str, object],
         *,
         preset: Optional[Mapping[str, str]] = None,
+        edit_target: Optional[Dict[str, object]] = None,
+        edit_block: Optional[QtWidgets.QWidget] = None,
     ) -> None:
         if not isinstance(group, dict):
             return
@@ -12066,7 +12119,7 @@ class MainWindow(QtWidgets.QMainWindow):
         actions_row.addStretch(1)
         cancel_btn = QtWidgets.QPushButton("Cancel", editor_frame)
         cancel_btn.setObjectName("FindObjectsConditionEditorCancel")
-        confirm_btn = QtWidgets.QPushButton("Add", editor_frame)
+        confirm_btn = QtWidgets.QPushButton("Update" if edit_target is not None else "Add", editor_frame)
         confirm_btn.setObjectName("FindObjectsConditionEditorConfirm")
         confirm_btn.setEnabled(False)
         actions_row.addWidget(cancel_btn, 0)
@@ -12086,6 +12139,8 @@ class MainWindow(QtWidgets.QMainWindow):
             "widget": editor_frame,
             "row": row,
             "confirm_btn": confirm_btn,
+            "edit_target": edit_target,
+            "edit_block": edit_block,
         }
         self._find_objects_last_touched_group_id = int(group_id)
         if preset is not None:
@@ -12106,24 +12161,64 @@ class MainWindow(QtWidgets.QMainWindow):
             row.set_value_invalid(row.has_missing_required_value())
             return
         descriptor = row.descriptor()
+        edit_target = editor.get("edit_target")
+        edit_block = editor.get("edit_block")
         group = self._find_objects_group_by_id(group_id)
         if group is None:
             self._close_find_objects_condition_editor()
             return
         self._close_find_objects_condition_editor()
-        self._add_find_objects_condition_descriptor(group, descriptor)
+        if isinstance(edit_target, dict):
+            edit_target.clear()
+            edit_target.update(dict(descriptor))
+            self._update_find_objects_rule_block_widget(edit_block, edit_target)
+        else:
+            self._add_find_objects_condition_descriptor(group, descriptor)
         self._remember_find_objects_condition_descriptors([descriptor])
         self._on_find_objects_condition_row_changed(group_id=group_id)
 
-    def _find_objects_condition_block_text(self, descriptor: Mapping[str, object]) -> str:
-        prop_key = str(descriptor.get("property") or "").strip()
-        op_key = str(descriptor.get("operator") or "").strip()
-        value = str(descriptor.get("value") or "").strip()
-        prop = self._find_objects_property_label(prop_key) if prop_key else ""
-        op = op_key.replace("_", " ")
-        if op_key == "exists":
-            return f"{prop} {op}".strip()
-        return f"{prop} {op} {value}".strip()
+    def _find_objects_condition_category_label(self, descriptor: Mapping[str, object]) -> str:
+        key = str(descriptor.get("category") or "").strip().lower()
+        if not key:
+            prop = str(descriptor.get("property") or "").strip()
+            key = str((getattr(ConditionRow, "_PROPERTY_SPECS", {}) or {}).get(prop, {}).get("category") or "").strip().lower()
+        if not key:
+            key = "item"
+        labels = getattr(ConditionRow, "_CATEGORY_LABELS", {}) or {}
+        return str(labels.get(key) or key.title()).strip()
+
+    def _find_objects_condition_property_label(self, descriptor: Mapping[str, object]) -> str:
+        return self._find_objects_property_label(str(descriptor.get("property") or "").strip())
+
+    def _find_objects_condition_operator_label(self, descriptor: Mapping[str, object]) -> str:
+        return self._find_objects_operator_label(str(descriptor.get("operator") or "").strip())
+
+    def _find_objects_condition_value_label(self, descriptor: Mapping[str, object]) -> str:
+        if str(descriptor.get("operator") or "").strip().lower() == "exists":
+            return ""
+        return str(descriptor.get("value") or "").strip()
+
+    def _update_find_objects_rule_block_widget(
+        self,
+        block: Optional[QtWidgets.QWidget],
+        descriptor: Mapping[str, object],
+    ) -> None:
+        if block is None:
+            return
+        cat = getattr(block, "_find_objects_cat_label", None)
+        prop = getattr(block, "_find_objects_prop_label", None)
+        op = getattr(block, "_find_objects_op_label", None)
+        value = getattr(block, "_find_objects_value_label", None)
+        if isinstance(cat, QtWidgets.QLabel):
+            cat.setText(self._find_objects_condition_category_label(descriptor))
+        if isinstance(prop, QtWidgets.QLabel):
+            prop.setText(self._find_objects_condition_property_label(descriptor))
+        if isinstance(op, QtWidgets.QLabel):
+            op.setText(self._find_objects_condition_operator_label(descriptor))
+        if isinstance(value, QtWidgets.QLabel):
+            text = self._find_objects_condition_value_label(descriptor)
+            value.setText(text)
+            value.setVisible(bool(text))
 
     def _add_find_objects_condition_descriptor(self, group: Dict[str, object], descriptor: Mapping[str, object]) -> None:
         if not isinstance(group, dict):
@@ -12148,22 +12243,60 @@ class MainWindow(QtWidgets.QMainWindow):
         group_id = int(group.get("id") or 0)
 
         block = QtWidgets.QFrame(self.find_objects_groups_body)
-        block.setObjectName("FindObjectsConditionBlock")
+        block.setObjectName("FindObjectsRuleBlock")
         block_layout = QtWidgets.QHBoxLayout(block)
-        block_layout.setContentsMargins(8, 6, 8, 6)
+        block_layout.setContentsMargins(8, 6, 6, 6)
         block_layout.setSpacing(8)
-        label = QtWidgets.QLabel(self._find_objects_condition_block_text(condition), block)
-        label.setObjectName("FindObjectsConditionBlockLabel")
-        label.setWordWrap(True)
+
+        cat_label = QtWidgets.QLabel("", block)
+        cat_label.setObjectName("FindObjectsRuleBlockCategory")
+        prop_label = QtWidgets.QLabel("", block)
+        prop_label.setObjectName("FindObjectsRuleBlockProperty")
+        op_label = QtWidgets.QLabel("", block)
+        op_label.setObjectName("FindObjectsRuleBlockOperator")
+        value_label = QtWidgets.QLabel("", block)
+        value_label.setObjectName("FindObjectsRuleBlockValue")
+        for lbl in (cat_label, prop_label, op_label, value_label):
+            lbl.setWordWrap(False)
+            lbl.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+
+        parts = QtWidgets.QWidget(block)
+        parts.setObjectName("FindObjectsRuleBlockParts")
+        parts_layout = QtWidgets.QHBoxLayout(parts)
+        parts_layout.setContentsMargins(0, 0, 0, 0)
+        parts_layout.setSpacing(8)
+        parts_layout.addWidget(cat_label, 0)
+        parts_layout.addWidget(prop_label, 0)
+        parts_layout.addWidget(op_label, 0)
+        parts_layout.addWidget(value_label, 0)
+
+        edit_btn = QtWidgets.QToolButton(block)
+        edit_btn.setObjectName("FindObjectsRuleBlockEdit")
+        edit_btn.setText("✎")
+        edit_btn.setAutoRaise(True)
+        edit_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        edit_btn.setToolTip("Edit condition")
+        edit_btn.clicked.connect(
+            lambda _checked=False, gid=group_id, desc=condition, w=block: self._on_find_objects_edit_condition_descriptor(gid, desc, w)
+        )
         remove_btn = QtWidgets.QToolButton(block)
-        remove_btn.setObjectName("FindObjectsConditionBlockRemove")
-        remove_btn.setText("X")
+        remove_btn.setObjectName("FindObjectsRuleBlockRemove")
+        remove_btn.setText("×")
         remove_btn.setAutoRaise(True)
         remove_btn.setCursor(QtCore.Qt.PointingHandCursor)
         remove_btn.setToolTip("Remove condition")
-        remove_btn.clicked.connect(lambda _checked=False, gid=group_id, desc=condition: self._remove_find_objects_condition_descriptor(gid, desc))
-        block_layout.addWidget(label, 1)
+        remove_btn.clicked.connect(
+            lambda _checked=False, gid=group_id, desc=condition: self._remove_find_objects_condition_descriptor(gid, desc)
+        )
+
+        block_layout.addWidget(parts, 1)
+        block_layout.addWidget(edit_btn, 0, QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         block_layout.addWidget(remove_btn, 0, QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        block._find_objects_cat_label = cat_label
+        block._find_objects_prop_label = prop_label
+        block._find_objects_op_label = op_label
+        block._find_objects_value_label = value_label
+        self._update_find_objects_rule_block_widget(block, condition)
 
         blocks = group.get("condition_blocks")
         if not isinstance(blocks, list):
@@ -12200,6 +12333,28 @@ class MainWindow(QtWidgets.QMainWindow):
             self._remove_find_objects_group(int(group.get("id") or 0))
             return
         self._on_find_objects_condition_row_changed(group_id=int(group.get("id") or 0))
+
+    def _on_find_objects_edit_condition_descriptor(
+        self,
+        group_id: int,
+        descriptor: Dict[str, object],
+        block_widget: Optional[QtWidgets.QWidget],
+    ) -> None:
+        editor = getattr(self, "_find_objects_active_editor", None)
+        if isinstance(editor, dict):
+            row = editor.get("row")
+            if isinstance(row, ConditionRow):
+                row.focus_first_step()
+            return
+        group = self._find_objects_group_by_id(int(group_id or 0))
+        if group is None:
+            return
+        self._open_find_objects_condition_editor(
+            group,
+            preset=descriptor,
+            edit_target=descriptor,
+            edit_block=block_widget,
+        )
 
     def _remove_find_objects_group(self, group_id: int, *, force: bool = False) -> None:
         if (not force) and len(self._find_objects_groups) <= 1:
