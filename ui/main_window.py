@@ -3122,6 +3122,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_add_filter_btn.setToolTip("Add a condition filter")
         self.find_objects_add_filter_btn.setAutoRaise(True)
         self.find_objects_add_filter_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        # Legacy entrypoint for the old inline multi-row builder; kept for code references
+        # but hidden in the simplified Revizto-like flow.
+        self.find_objects_add_filter_btn.setVisible(False)
         scope_meta_row.addWidget(self.find_objects_add_filter_btn, 0)
         header_section.addLayout(scope_meta_row, 0)
         find_objects_layout.addWidget(self.find_objects_header_frame, 0)
@@ -3140,7 +3143,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_start_cta_btn.setObjectName("FindObjectsStartCTA")
         start_state_layout.addWidget(self.find_objects_start_message, 0, QtCore.Qt.AlignCenter)
         start_state_layout.addWidget(self.find_objects_start_cta_btn, 0, QtCore.Qt.AlignCenter)
-        self.find_objects_start_state_frame.setVisible(True)
+        # Deprecated: simplified builder always shows the conditions/actions area.
+        self.find_objects_start_state_frame.setVisible(False)
         find_objects_layout.addWidget(self.find_objects_start_state_frame, 0)
 
         self.find_objects_advanced_toggle_btn = QtWidgets.QToolButton(self.find_objects_group)
@@ -3216,6 +3220,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_match_buttons.setExclusive(True)
         self.find_objects_match_buttons.addButton(self.find_objects_match_all_btn)
         self.find_objects_match_buttons.addButton(self.find_objects_match_any_btn)
+        # Revizto-like UI: grouping is done explicitly via "Add group"; no inline AND/OR toggles.
+        self.find_objects_match_label.setVisible(False)
+        self.find_objects_match_all_btn.setVisible(False)
+        self.find_objects_match_any_btn.setVisible(False)
         conditions_header_layout.addWidget(self.find_objects_conditions_title, 0)
         conditions_header_layout.addWidget(self.find_objects_conditions_hint, 0)
         conditions_header_layout.addSpacing(10)
@@ -3254,7 +3262,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_add_group_btn.setToolTip("Add nested group")
         self.find_objects_add_condition_btn.setMinimumHeight(24)
         self.find_objects_add_group_btn.setMinimumHeight(24)
-        self.find_objects_add_group_btn.setVisible(False)
+        self.find_objects_add_group_btn.setVisible(True)
         conditions_actions.addWidget(self.find_objects_add_condition_btn, 0)
         conditions_actions.addWidget(self.find_objects_add_group_btn, 0)
         conditions_actions.addStretch(1)
@@ -11304,22 +11312,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_scope_combo.setCurrentIndex(everywhere_index)
 
     def _update_find_objects_start_state(self) -> None:
-        """Show the empty start state when there are no active inputs at all."""
+        """Legacy: start state (deprecated by simplified builder)."""
         if not hasattr(self, "find_objects_start_state_frame"):
             return
-        has_query = bool(str(self.find_objects_search_edit.text() or "").strip())
-        has_active_conditions = any(
-            any(isinstance(r, ConditionRow) and r.is_active() for r in list(g.get("rows") or []))
-            for g in self._find_objects_groups
-        )
-        scope_everywhere = str(self._find_objects_scope or "").strip().lower() in {"everywhere", ""}
-        panel_opened = bool(getattr(self, "_find_objects_panel_opened", False))
-        show_start = not has_query and not has_active_conditions and scope_everywhere and not panel_opened
-        self.find_objects_start_state_frame.setVisible(show_start)
-        if show_start:
-            self.find_objects_advanced_frame.setVisible(False)
-            self.find_objects_results_frame.setVisible(False)
-        else:
+        self.find_objects_start_state_frame.setVisible(False)
+        if hasattr(self, "find_objects_advanced_frame"):
+            self.find_objects_advanced_frame.setVisible(True)
+        if hasattr(self, "find_objects_results_frame"):
             self.find_objects_results_frame.setVisible(True)
 
     def _set_find_objects_advanced_visible(self, visible: bool) -> None:
@@ -11786,7 +11785,8 @@ class MainWindow(QtWidgets.QMainWindow):
             if child is not None:
                 child.deleteLater()
         self.find_objects_groups_layout.addStretch(1)
-        self._create_find_objects_group(add_initial_condition=True)
+        # Do not render placeholder groups/rows. Groups and conditions are created explicitly
+        # via "Add group" / "Add condition".
         self._render_find_objects_filter_chips()
         self._update_find_objects_matches_preview(0)
         self._update_find_objects_find_all_state()
@@ -12060,8 +12060,6 @@ class MainWindow(QtWidgets.QMainWindow):
         if isinstance(rows, list) and (not rows) and (not child_groups):
             if len(self._find_objects_groups) > 1:
                 self._remove_find_objects_group(int(group.get("id") or 0))
-            else:
-                self._add_find_objects_condition_row(group)
         self._refresh_find_objects_group_headers()
         self._on_find_objects_condition_row_changed(group_id=int(group.get("id") or 0))
 
@@ -12097,8 +12095,7 @@ class MainWindow(QtWidgets.QMainWindow):
             frame.deleteLater()
 
         self._find_objects_groups = [group for group in self._find_objects_groups if int(group.get("id") or 0) != int(group_id or 0)]
-        if not self._find_objects_groups:
-            self._create_find_objects_group(add_initial_condition=True)
+        # No placeholder group.
         if self._find_objects_last_touched_group_id == int(group_id or 0):
             self._find_objects_last_touched_group_id = int(parent_group.get("id") or 0) if parent_group is not None else 0
         self._refresh_find_objects_group_headers()
@@ -12129,12 +12126,12 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_find_objects_add_group_clicked(self, checked: bool = False, parent_group_id: Optional[int] = None) -> None:
         _ = checked
         if not self._find_objects_groups:
-            self._create_find_objects_group(add_initial_condition=True)
+            self._create_find_objects_group(add_initial_condition=False)
             self._on_find_objects_condition_row_changed(group_id=self._find_objects_last_touched_group_id)
             return
         target_parent_id = int(parent_group_id or self._find_objects_last_touched_group_id or 0)
         group = self._create_find_objects_group(
-            add_initial_condition=True,
+            add_initial_condition=False,
             parent_group_id=target_parent_id if target_parent_id > 0 else None,
         )
         self._on_find_objects_condition_row_changed(group_id=int(group.get("id") or 0))
