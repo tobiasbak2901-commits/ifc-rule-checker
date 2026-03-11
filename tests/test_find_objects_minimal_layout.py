@@ -38,6 +38,5 @@ def test_find_objects_group_ui_is_flat_and_footer_actions_are_minimal():
 def test_find_objects_find_all_requires_query_or_valid_condition():
     source = Path("ui/main_window.py").read_text(encoding="utf-8")
     assert "def _find_objects_has_query_or_valid_filters(self) -> bool:" in source
-    assert "if not row.is_active():" in source
-    assert "if row.has_missing_required_value():" in source
+    assert 'op != "exists" and not value' in source
     assert "return False" in source

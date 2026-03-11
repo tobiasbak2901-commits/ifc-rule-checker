@@ -2736,9 +2736,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self._find_objects_group_counter = 0
         self._find_objects_groups: List[Dict[str, object]] = []
         self._find_objects_last_touched_group_id = 0
+        self._find_objects_panel_opened = False
         self._find_objects_recent_condition_descriptors: List[Dict[str, str]] = []
         self._find_objects_distinct_values_cache: Dict[str, List[str]] = {}
         self._find_objects_suggest_menu: Optional[QtWidgets.QMenu] = None
+        self._find_objects_active_editor: Optional[Dict[str, object]] = None
         self._find_objects_debounce_mode = "search"
         self._find_objects_debounce_timer = QtCore.QTimer(self)
         self._find_objects_debounce_timer.setSingleShot(True)
@@ -3031,14 +3033,23 @@ class MainWindow(QtWidgets.QMainWindow):
         find_objects_layout.setContentsMargins(16, 16, 16, 16)
         find_objects_layout.setSpacing(10)
 
+        # Primary action buttons created early so they can live in the header row.
+        self.find_objects_find_btn = QtWidgets.QPushButton("Find all")
+        self.find_objects_find_btn.setObjectName("FindObjectsFindPrimary")
+        self.find_objects_clear_btn = QtWidgets.QPushButton("Clear")
+        self.find_objects_clear_btn.setObjectName("FindObjectsClearSecondary")
+        self.find_objects_clear_btn.setVisible(True)
+
         self.find_objects_header_frame = QtWidgets.QFrame(self.find_objects_group)
         self.find_objects_header_frame.setObjectName("FindObjectsHeaderZone")
         header_section = QtWidgets.QVBoxLayout(self.find_objects_header_frame)
         header_section.setContentsMargins(0, 0, 0, 0)
         header_section.setSpacing(6)
 
+        # Section title kept for code references but hidden — combo shows the active scope.
         self.find_objects_scope_section_title = QtWidgets.QLabel("Search scope")
         self.find_objects_scope_section_title.setObjectName("FindObjectsZoneTitle")
+        self.find_objects_scope_section_title.setVisible(False)
 
         self.find_objects_scope_combo = QtWidgets.QComboBox()
         self.find_objects_scope_combo.setObjectName("FindObjectsScopeCombo")
@@ -3050,36 +3061,36 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_scope_combo.view().setProperty("themeScope", "app")
         self.find_objects_scope_combo.setMinimumWidth(220)
 
-        scope_row = QtWidgets.QHBoxLayout()
-        scope_row.setContentsMargins(0, 0, 0, 0)
-        scope_row.setSpacing(8)
-        scope_row.addWidget(self.find_objects_scope_section_title, 0)
-        scope_row.addStretch(1)
-        scope_row.addWidget(self.find_objects_scope_combo, 0)
-        header_section.addLayout(scope_row, 0)
-
-        search_row = QtWidgets.QHBoxLayout()
-        search_row.setContentsMargins(0, 0, 0, 0)
-        search_row.setSpacing(8)
         self.find_objects_search_edit = QtWidgets.QLineEdit()
         self.find_objects_search_edit.setObjectName("FindObjectsSearchInput")
         self.find_objects_search_edit.setPlaceholderText("Quick search (name, system, type...)")
         self.find_objects_search_edit.setClearButtonEnabled(True)
-        search_row.addWidget(self.find_objects_search_edit, 1)
+
+        # Suggest button kept for code references but hidden in the minimal header.
         self.find_objects_suggest_btn = QtWidgets.QToolButton()
         self.find_objects_suggest_btn.setObjectName("FindObjectsSuggestBtn")
         self.find_objects_suggest_btn.setText("Suggest")
         self.find_objects_suggest_btn.setCursor(QtCore.Qt.PointingHandCursor)
         self.find_objects_suggest_btn.setAutoRaise(True)
         self.find_objects_suggest_btn.setToolTip("Get quick heuristic filter suggestions")
-        search_row.addWidget(self.find_objects_suggest_btn, 0)
-        header_section.addLayout(search_row, 0)
+        self.find_objects_suggest_btn.setVisible(False)
+
+        # Minimal primary row: [scope combo] [quick search] [Find all]
+        primary_row = QtWidgets.QHBoxLayout()
+        primary_row.setContentsMargins(0, 0, 0, 0)
+        primary_row.setSpacing(8)
+        primary_row.addWidget(self.find_objects_scope_combo, 1)
+        primary_row.addWidget(self.find_objects_search_edit, 2)
+        primary_row.addWidget(self.find_objects_find_btn, 0)
+        header_section.addLayout(primary_row, 0)
 
         scope_meta_row = QtWidgets.QHBoxLayout()
         scope_meta_row.setContentsMargins(0, 0, 0, 0)
         scope_meta_row.setSpacing(8)
+        # scope_active label kept for code references but hidden — combo already shows scope.
         self.find_objects_scope_active = QtWidgets.QLabel("Active: Everywhere")
         self.find_objects_scope_active.setObjectName("SecondaryText")
+        self.find_objects_scope_active.setVisible(False)
         self.find_objects_scope_selection_chip = QtWidgets.QLabel("", self.find_objects_header_frame)
         self.find_objects_scope_selection_chip.setObjectName("FindObjectsScopeSelectionChip")
         self.find_objects_scope_selection_chip.setVisible(False)
@@ -3088,25 +3099,54 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_scope_warning.setVisible(False)
         self.find_objects_selected_count = QtWidgets.QLabel("Selected: 0")
         self.find_objects_selected_count.setObjectName("SecondaryText")
+        self.find_objects_selected_count.setVisible(False)
         self.find_objects_indexed_count = QtWidgets.QLabel("Indexed: 0")
         self.find_objects_indexed_count.setObjectName("SecondaryText")
+        self.find_objects_indexed_count.setVisible(False)
         self.find_objects_scope_elements_count = QtWidgets.QLabel("Scope elements: 0")
         self.find_objects_scope_elements_count.setObjectName("SecondaryText")
-        scope_meta_row.addWidget(self.find_objects_scope_active, 0)
+        self.find_objects_scope_elements_count.setVisible(False)
+        self.find_objects_scope_chip_clear_btn = QtWidgets.QToolButton(self.find_objects_header_frame)
+        self.find_objects_scope_chip_clear_btn.setObjectName("FindObjectsScopeChipClearBtn")
+        self.find_objects_scope_chip_clear_btn.setText("✕")
+        self.find_objects_scope_chip_clear_btn.setAutoRaise(True)
+        self.find_objects_scope_chip_clear_btn.setToolTip("Clear scope filter — switch to Everywhere")
+        self.find_objects_scope_chip_clear_btn.setVisible(False)
+        self.find_objects_scope_chip_clear_btn.clicked.connect(self._on_find_objects_scope_condition_removed)
         scope_meta_row.addWidget(self.find_objects_scope_selection_chip, 0)
+        scope_meta_row.addWidget(self.find_objects_scope_chip_clear_btn, 0)
         scope_meta_row.addWidget(self.find_objects_scope_warning, 0)
-        scope_meta_row.addWidget(self.find_objects_selected_count, 0)
-        scope_meta_row.addWidget(self.find_objects_scope_elements_count, 0)
         scope_meta_row.addStretch(1)
-        scope_meta_row.addWidget(self.find_objects_indexed_count, 0)
+        self.find_objects_add_filter_btn = QtWidgets.QToolButton(self.find_objects_header_frame)
+        self.find_objects_add_filter_btn.setObjectName("FindObjectsAddFilterBtn")
+        self.find_objects_add_filter_btn.setText("+ Add filter")
+        self.find_objects_add_filter_btn.setToolTip("Add a condition filter")
+        self.find_objects_add_filter_btn.setAutoRaise(True)
+        self.find_objects_add_filter_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        # Legacy entrypoint for the old inline multi-row builder; kept for code references
+        # but hidden in the simplified Revizto-like flow.
+        self.find_objects_add_filter_btn.setVisible(False)
+        scope_meta_row.addWidget(self.find_objects_add_filter_btn, 0)
         header_section.addLayout(scope_meta_row, 0)
         find_objects_layout.addWidget(self.find_objects_header_frame, 0)
 
-        self.find_objects_find_btn = QtWidgets.QPushButton("Find all")
-        self.find_objects_find_btn.setObjectName("FindObjectsFindPrimary")
-        self.find_objects_clear_btn = QtWidgets.QPushButton("Clear")
-        self.find_objects_clear_btn.setObjectName("FindObjectsClearSecondary")
-        self.find_objects_clear_btn.setVisible(True)
+        # Empty start state — shown when there are no filters, no query, and scope is Everywhere.
+        self.find_objects_start_state_frame = QtWidgets.QFrame(self.find_objects_group)
+        self.find_objects_start_state_frame.setObjectName("FindObjectsStartState")
+        start_state_layout = QtWidgets.QVBoxLayout(self.find_objects_start_state_frame)
+        start_state_layout.setContentsMargins(16, 24, 16, 24)
+        start_state_layout.setSpacing(12)
+        start_state_layout.setAlignment(QtCore.Qt.AlignCenter)
+        self.find_objects_start_message = QtWidgets.QLabel("Start by adding a condition")
+        self.find_objects_start_message.setObjectName("FindObjectsStartMessage")
+        self.find_objects_start_message.setAlignment(QtCore.Qt.AlignCenter)
+        self.find_objects_start_cta_btn = QtWidgets.QPushButton("+ Add condition")
+        self.find_objects_start_cta_btn.setObjectName("FindObjectsStartCTA")
+        start_state_layout.addWidget(self.find_objects_start_message, 0, QtCore.Qt.AlignCenter)
+        start_state_layout.addWidget(self.find_objects_start_cta_btn, 0, QtCore.Qt.AlignCenter)
+        # Deprecated: simplified builder always shows the conditions/actions area.
+        self.find_objects_start_state_frame.setVisible(False)
+        find_objects_layout.addWidget(self.find_objects_start_state_frame, 0)
 
         self.find_objects_advanced_toggle_btn = QtWidgets.QToolButton(self.find_objects_group)
         self.find_objects_advanced_toggle_btn.setObjectName("FindObjectsAdvancedToggle")
@@ -3163,8 +3203,34 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_conditions_title.setObjectName("FindObjectsConditionListTitle")
         self.find_objects_conditions_hint = QtWidgets.QLabel("[Category] [Property] [Operation] [Value]", self.find_objects_conditions_header)
         self.find_objects_conditions_hint.setObjectName("FindObjectsConditionListHint")
+        self.find_objects_match_label = QtWidgets.QLabel("Match:", self.find_objects_conditions_header)
+        self.find_objects_match_label.setObjectName("FindObjectsMatchLabel")
+        self.find_objects_match_all_btn = QtWidgets.QToolButton(self.find_objects_conditions_header)
+        self.find_objects_match_all_btn.setObjectName("FindObjectsMatchToggle")
+        self.find_objects_match_all_btn.setText("ALL")
+        self.find_objects_match_all_btn.setCheckable(True)
+        self.find_objects_match_all_btn.setChecked(True)
+        self.find_objects_match_all_btn.setToolTip("All conditions must match")
+        self.find_objects_match_any_btn = QtWidgets.QToolButton(self.find_objects_conditions_header)
+        self.find_objects_match_any_btn.setObjectName("FindObjectsMatchToggle")
+        self.find_objects_match_any_btn.setText("ANY")
+        self.find_objects_match_any_btn.setCheckable(True)
+        self.find_objects_match_any_btn.setChecked(False)
+        self.find_objects_match_any_btn.setToolTip("Any condition may match")
+        self.find_objects_match_buttons = QtWidgets.QButtonGroup(self.find_objects_conditions_header)
+        self.find_objects_match_buttons.setExclusive(True)
+        self.find_objects_match_buttons.addButton(self.find_objects_match_all_btn)
+        self.find_objects_match_buttons.addButton(self.find_objects_match_any_btn)
+        # Revizto-like UI: grouping is done explicitly via "Add group"; no inline AND/OR toggles.
+        self.find_objects_match_label.setVisible(False)
+        self.find_objects_match_all_btn.setVisible(False)
+        self.find_objects_match_any_btn.setVisible(False)
         conditions_header_layout.addWidget(self.find_objects_conditions_title, 0)
         conditions_header_layout.addWidget(self.find_objects_conditions_hint, 0)
+        conditions_header_layout.addSpacing(10)
+        conditions_header_layout.addWidget(self.find_objects_match_label, 0)
+        conditions_header_layout.addWidget(self.find_objects_match_all_btn, 0)
+        conditions_header_layout.addWidget(self.find_objects_match_any_btn, 0)
         conditions_header_layout.addStretch(1)
         conditions_section.addWidget(self.find_objects_conditions_header, 0)
 
@@ -3197,6 +3263,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_add_group_btn.setToolTip("Add nested group")
         self.find_objects_add_condition_btn.setMinimumHeight(24)
         self.find_objects_add_group_btn.setMinimumHeight(24)
+        self.find_objects_add_group_btn.setVisible(True)
         conditions_actions.addWidget(self.find_objects_add_condition_btn, 0)
         conditions_actions.addWidget(self.find_objects_add_group_btn, 0)
         conditions_actions.addStretch(1)
@@ -3211,14 +3278,22 @@ class MainWindow(QtWidgets.QMainWindow):
         results_section.setSpacing(8)
         self.find_objects_results_title = QtWidgets.QLabel("Results (0)")
         self.find_objects_results_title.setObjectName("SecondaryText")
-        results_section.addWidget(self.find_objects_results_title, 0)
+        self.find_objects_results_title.setVisible(False)
         self.find_objects_matches_label = QtWidgets.QLabel("Matches: 0")
         self.find_objects_matches_label.setObjectName("FindObjectsMatchesCount")
-        results_section.addWidget(self.find_objects_matches_label, 0)
-
         self.find_objects_results_count_large = QtWidgets.QLabel("0 objects found")
         self.find_objects_results_count_large.setObjectName("FindObjectsResultsCountLarge")
-        results_section.addWidget(self.find_objects_results_count_large, 0)
+        self.find_objects_results_count_large.setVisible(False)
+        self.find_objects_results_scope_label = QtWidgets.QLabel("Scope: Everywhere")
+        self.find_objects_results_scope_label.setObjectName("FindObjectsResultsScopeLabel")
+        self.find_objects_results_scope_label.setVisible(False)
+        results_header_row = QtWidgets.QHBoxLayout()
+        results_header_row.setContentsMargins(0, 0, 0, 0)
+        results_header_row.setSpacing(12)
+        results_header_row.addWidget(self.find_objects_matches_label, 0)
+        results_header_row.addStretch(1)
+        results_header_row.addWidget(self.find_objects_results_scope_label, 0)
+        results_section.addLayout(results_header_row, 0)
 
         self.find_objects_filter_chip_wrap = QtWidgets.QWidget(self.find_objects_group)
         self.find_objects_filter_chip_wrap.setObjectName("FindObjectsFilterChipWrap")
@@ -3289,12 +3364,30 @@ class MainWindow(QtWidgets.QMainWindow):
         footer_actions = QtWidgets.QHBoxLayout(self.find_objects_action_footer)
         footer_actions.setContentsMargins(10, 8, 10, 8)
         footer_actions.setSpacing(8)
+        # Checkboxes kept for behavior-code compatibility; state is driven by the options menu.
         self.find_objects_prune_below_checkbox = QtWidgets.QCheckBox("Prune below result")
         self.find_objects_prune_below_checkbox.setObjectName("FindObjectsOptionCheck")
+        self.find_objects_prune_below_checkbox.setVisible(False)
         self.find_objects_elements_only_checkbox = QtWidgets.QCheckBox("Elements only")
         self.find_objects_elements_only_checkbox.setObjectName("FindObjectsOptionCheck")
-        footer_actions.addWidget(self.find_objects_prune_below_checkbox, 0)
-        footer_actions.addWidget(self.find_objects_elements_only_checkbox, 0)
+        self.find_objects_elements_only_checkbox.setVisible(False)
+        self.find_objects_options_btn = QtWidgets.QToolButton(self.find_objects_action_footer)
+        self.find_objects_options_btn.setObjectName("FindObjectsOptionsBtn")
+        self.find_objects_options_btn.setText("⋯ Options")
+        self.find_objects_options_btn.setToolTip("Display options")
+        self.find_objects_options_btn.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        self.find_objects_options_btn.setAutoRaise(True)
+        self.find_objects_options_menu = QtWidgets.QMenu(self.find_objects_options_btn)
+        self.find_objects_options_menu.setObjectName("FindObjectsOptionsMenu")
+        self.find_objects_options_menu.setProperty("themeScope", "app")
+        self.find_objects_options_action_prune = self.find_objects_options_menu.addAction("Prune below result")
+        self.find_objects_options_action_prune.setCheckable(True)
+        self.find_objects_options_action_prune.toggled.connect(self.find_objects_prune_below_checkbox.setChecked)
+        self.find_objects_options_action_elements_only = self.find_objects_options_menu.addAction("Elements only")
+        self.find_objects_options_action_elements_only.setCheckable(True)
+        self.find_objects_options_action_elements_only.toggled.connect(self.find_objects_elements_only_checkbox.setChecked)
+        self.find_objects_options_btn.setMenu(self.find_objects_options_menu)
+        footer_actions.addWidget(self.find_objects_options_btn, 0)
         footer_actions.addStretch(1)
 
         self.find_objects_select_all_btn = QtWidgets.QPushButton("Select all")
@@ -3325,7 +3418,6 @@ class MainWindow(QtWidgets.QMainWindow):
         footer_actions.addWidget(self.find_objects_isolate_btn, 0)
         footer_actions.addWidget(self.find_objects_focus_btn, 0)
         footer_actions.addWidget(self.find_objects_clear_btn, 0)
-        footer_actions.addWidget(self.find_objects_find_btn, 0)
         find_objects_layout.addWidget(self.find_objects_action_footer, 0)
 
         self.find_objects_footer_frame = QtWidgets.QFrame(self.find_objects_group)
@@ -4493,8 +4585,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.find_objects_search_edit.returnPressed.connect(self._on_find_objects_find_clicked)
         self.find_objects_suggest_btn.clicked.connect(self._on_find_objects_suggest_filters_clicked)
         self.find_objects_scope_condition_remove_btn.clicked.connect(self._on_find_objects_scope_condition_removed)
+        self.find_objects_start_cta_btn.clicked.connect(self._on_find_objects_add_filter_btn_clicked)
         self.find_objects_add_condition_btn.clicked.connect(self._on_find_objects_add_condition_clicked)
         self.find_objects_add_group_btn.clicked.connect(self._on_find_objects_add_group_clicked)
+        self.find_objects_match_all_btn.toggled.connect(lambda checked: self._on_find_objects_global_match_toggled("and", checked))
+        self.find_objects_match_any_btn.toggled.connect(lambda checked: self._on_find_objects_global_match_toggled("or", checked))
+        self.find_objects_add_filter_btn.clicked.connect(self._on_find_objects_add_filter_btn_clicked)
         self.find_objects_more_action_clear.triggered.connect(self._on_find_objects_clear_clicked)
         self.find_objects_more_action_select_all.triggered.connect(self._on_find_objects_select_all_clicked)
         self.find_objects_more_action_isolate.triggered.connect(self._on_find_objects_isolate_clicked)
@@ -6341,6 +6437,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 font-size: 11px;
                 font-weight: 600;
             }}
+            QToolButton#FindObjectsScopeChipClearBtn {{
+                color: #94A3B8;
+                background: transparent;
+                border: none;
+                font-size: 11px;
+                padding: 0px 2px;
+            }}
+            QToolButton#FindObjectsScopeChipClearBtn:hover {{
+                color: #F1F5F9;
+            }}
             QFrame#FindObjectsScopeConditionRow {{
                 background: transparent;
                 border: none;
@@ -6431,6 +6537,27 @@ class MainWindow(QtWidgets.QMainWindow):
                 border-color: rgba(255, 46, 136, 112);
                 color: #FCE7F3;
             }}
+            QLabel#FindObjectsMatchLabel {{
+                color: #94A3B8;
+                font-size: 10px;
+                font-weight: 600;
+            }}
+            QToolButton#FindObjectsMatchToggle {{
+                background: transparent;
+                color: #94A3B8;
+                border: 1px solid rgba(148, 163, 184, 26);
+                border-radius: 6px;
+                padding: 0px 8px;
+                min-width: 34px;
+                min-height: 20px;
+                font-size: 9px;
+                font-weight: 600;
+            }}
+            QToolButton#FindObjectsMatchToggle:checked {{
+                background: rgba(255, 46, 136, 0.18);
+                border-color: rgba(255, 46, 136, 112);
+                color: #FCE7F3;
+            }}
             QScrollArea#FindObjectsGroupsScroll {{
                 background: transparent;
                 border: none;
@@ -6516,6 +6643,52 @@ class MainWindow(QtWidgets.QMainWindow):
             QPushButton#FindObjectsInlineAction:pressed {{
                 color: #FCE7F3;
             }}
+            QFrame#FindObjectsRuleBlock {{
+                background: rgba(15, 23, 38, 0.72);
+                border: 1px solid rgba(148, 163, 184, 44);
+                border-radius: 8px;
+            }}
+            QLabel#FindObjectsRuleBlockCategory {{
+                color: #94A3B8;
+                font-size: 10px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.4px;
+            }}
+            QLabel#FindObjectsRuleBlockProperty {{
+                color: #E2E8F0;
+                font-size: 11px;
+                font-weight: 600;
+            }}
+            QLabel#FindObjectsRuleBlockOperator {{
+                color: #CBD5E1;
+                font-size: 11px;
+            }}
+            QLabel#FindObjectsRuleBlockValue {{
+                color: #E2E8F0;
+                font-size: 11px;
+            }}
+            QToolButton#FindObjectsRuleBlockEdit,
+            QToolButton#FindObjectsRuleBlockRemove {{
+                background: transparent;
+                color: rgba(203, 213, 225, 0.75);
+                border: none;
+                min-width: 18px;
+                min-height: 18px;
+                max-width: 18px;
+                max-height: 18px;
+                border-radius: 8px;
+                font-size: 11px;
+                font-weight: 700;
+            }}
+            QToolButton#FindObjectsRuleBlockEdit:hover {{
+                background: rgba(148, 163, 184, 0.12);
+                color: #E2E8F0;
+            }}
+            QToolButton#FindObjectsRuleBlockRemove:hover {{
+                background: rgba(248, 113, 113, 0.16);
+                color: #FCA5A5;
+            }}
             QFrame#FindObjectsConditionRow {{
                 background: transparent;
                 border: none;
@@ -6527,6 +6700,7 @@ class MainWindow(QtWidgets.QMainWindow):
             QComboBox#FindObjectsOperatorCombo,
             QLineEdit#FindObjectsValueInput,
             QToolButton#FindObjectsValuePickerTrigger,
+            QComboBox#FindObjectsValueEnumCombo,
             QComboBox#FindObjectsValueChoice {{
                 min-height: 32px;
                 padding: 2px 8px;
@@ -6541,12 +6715,40 @@ class MainWindow(QtWidgets.QMainWindow):
             QComboBox#FindObjectsOperatorCombo:focus,
             QLineEdit#FindObjectsValueInput:focus,
             QToolButton#FindObjectsValuePickerTrigger:focus,
+            QComboBox#FindObjectsValueEnumCombo:focus,
             QComboBox#FindObjectsValueChoice:focus {{
                 border-color: rgba(255, 46, 136, 120);
             }}
             QLineEdit#FindObjectsValueInput[invalid="true"],
             QToolButton#FindObjectsValuePickerTrigger[invalid="true"],
+            QComboBox#FindObjectsValueEnumCombo[invalid="true"],
             QComboBox#FindObjectsValueChoice[invalid="true"] {{
+                border-color: rgba(248, 113, 113, 185);
+                background: rgba(127, 29, 29, 0.28);
+            }}
+            QFrame#FindObjectsValueBoolWrap {{
+                background: transparent;
+                border: none;
+            }}
+            QToolButton#FindObjectsValueBoolTrueBtn,
+            QToolButton#FindObjectsValueBoolFalseBtn {{
+                min-height: 32px;
+                padding: 2px 8px;
+                border: 1px solid rgba(148, 163, 184, 44);
+                border-radius: 6px;
+                background: rgba(15, 23, 38, 0.78);
+                color: #E2E8F0;
+                font-size: 11px;
+                font-weight: 600;
+            }}
+            QToolButton#FindObjectsValueBoolTrueBtn:checked,
+            QToolButton#FindObjectsValueBoolFalseBtn:checked {{
+                border-color: rgba(255, 46, 136, 120);
+                background: rgba(255, 46, 136, 0.14);
+                color: #FCE7F3;
+            }}
+            QToolButton#FindObjectsValueBoolTrueBtn[invalid="true"],
+            QToolButton#FindObjectsValueBoolFalseBtn[invalid="true"] {{
                 border-color: rgba(248, 113, 113, 185);
                 background: rgba(127, 29, 29, 0.28);
             }}
@@ -6577,6 +6779,38 @@ class MainWindow(QtWidgets.QMainWindow):
             QToolButton#FindObjectsConditionSettingsBtn:hover {{
                 background: rgba(148, 163, 184, 0.16);
                 color: #CBD5E1;
+            }}
+            QToolButton#FindObjectsConditionRowEditBtn {{
+                background: transparent;
+                color: #94A3B8;
+                border: none;
+                border-radius: 6px;
+                min-width: 18px;
+                min-height: 18px;
+                max-width: 18px;
+                max-height: 18px;
+                font-size: 11px;
+                font-weight: 700;
+            }}
+            QToolButton#FindObjectsConditionRowEditBtn:hover {{
+                background: rgba(148, 163, 184, 0.16);
+                color: #E2E8F0;
+            }}
+            QToolButton#FindObjectsConditionResetBtn {{
+                background: transparent;
+                color: #94A3B8;
+                border: none;
+                border-radius: 6px;
+                min-width: 18px;
+                min-height: 18px;
+                max-width: 18px;
+                max-height: 18px;
+                font-size: 12px;
+                font-weight: 700;
+            }}
+            QToolButton#FindObjectsConditionResetBtn:hover {{
+                background: rgba(148, 163, 184, 0.16);
+                color: #E2E8F0;
             }}
             QToolButton#FindObjectsConditionRemoveBtn {{
                 background: transparent;
@@ -6620,6 +6854,66 @@ class MainWindow(QtWidgets.QMainWindow):
                 font-size: 11px;
                 padding: 2px 4px;
             }}
+            QFrame#FindObjectsFilterChipFrame {{
+                background: rgba(30, 41, 59, 0.75);
+                border: 1px solid rgba(148, 163, 184, 55);
+                border-radius: 9px;
+            }}
+            QLabel#FindObjectsFilterChipLabel {{
+                color: #E2E8F0;
+                font-size: 11px;
+                background: transparent;
+                border: none;
+            }}
+            QFrame#FindObjectsConditionStepChipFrame {{
+                background: rgba(30, 41, 59, 0.75);
+                border: 1px solid rgba(148, 163, 184, 55);
+                border-radius: 9px;
+            }}
+            QLabel#FindObjectsConditionStepChipLabel {{
+                color: #E2E8F0;
+                font-size: 11px;
+                background: transparent;
+                border: none;
+            }}
+            QToolButton#FindObjectsConditionStepChipEditBtn {{
+                color: rgba(148, 163, 184, 0.8);
+                background: transparent;
+                border: none;
+                font-size: 11px;
+                min-width: 14px;
+                max-width: 14px;
+                padding: 0px;
+            }}
+            QToolButton#FindObjectsConditionStepChipEditBtn:hover {{
+                color: #F1F5F9;
+            }}
+            QToolButton#FindObjectsChipRemoveBtn {{
+                color: rgba(148, 163, 184, 0.7);
+                background: transparent;
+                border: none;
+                border-radius: 7px;
+                font-size: 11px;
+                min-width: 14px;
+                max-width: 14px;
+                padding: 0px;
+            }}
+            QToolButton#FindObjectsChipRemoveBtn:hover {{
+                color: #F87171;
+                background: rgba(248, 113, 113, 0.12);
+            }}
+            QToolButton#FindObjectsAddFilterBtn {{
+                color: #93C5FD;
+                background: transparent;
+                border: none;
+                font-size: 11px;
+                padding: 2px 4px;
+            }}
+            QToolButton#FindObjectsAddFilterBtn:hover {{
+                color: #BFDBFE;
+                background: rgba(147, 197, 253, 0.08);
+                border-radius: 4px;
+            }}
             QCheckBox#FindObjectsOptionCheck {{
                 color: #CBD5E1;
                 spacing: 6px;
@@ -6656,6 +6950,18 @@ class MainWindow(QtWidgets.QMainWindow):
             }}
             QToolButton#FindObjectsMoreMenuBtn:hover {{
                 border-color: rgba(148, 163, 184, 90);
+            }}
+            QToolButton#FindObjectsOptionsBtn {{
+                color: #94A3B8;
+                background: transparent;
+                border: none;
+                font-size: 11px;
+                padding: 2px 6px;
+            }}
+            QToolButton#FindObjectsOptionsBtn:hover {{
+                color: #CBD5E1;
+                background: rgba(148, 163, 184, 0.10);
+                border-radius: 5px;
             }}
             QFrame#FindObjectsActionFooter {{
                 background: transparent;
@@ -6731,6 +7037,25 @@ class MainWindow(QtWidgets.QMainWindow):
                 padding: 6px 10px;
                 border-radius: 10px;
             }}
+            QFrame#FindObjectsStartState {{
+                background: transparent;
+                border: none;
+            }}
+            QLabel#FindObjectsStartMessage {{
+                color: #64748B;
+                font-size: 13px;
+            }}
+            QPushButton#FindObjectsStartCTA {{
+                color: #93C5FD;
+                background: transparent;
+                border: 1px solid rgba(147, 197, 253, 0.35);
+                border-radius: 6px;
+                padding: 6px 16px;
+                font-size: 12px;
+            }}
+            QPushButton#FindObjectsStartCTA:hover {{
+                background: rgba(147, 197, 253, 0.10);
+            }}
             QFrame#FindObjectsResultsSection {{
                 background: rgba(15, 23, 38, 0.30);
                 border: none;
@@ -6752,6 +7077,10 @@ class MainWindow(QtWidgets.QMainWindow):
             }}
             QLabel#FindObjectsMatchesCount[invalid="true"] {{
                 color: #FCA5A5;
+            }}
+            QLabel#FindObjectsResultsScopeLabel {{
+                color: #64748B;
+                font-size: 11px;
             }}
             QTableView#FindObjectsResultsTable {{
                 background: rgba(8, 13, 24, 0.58);
@@ -10633,35 +10962,26 @@ class MainWindow(QtWidgets.QMainWindow):
         origin = self.find_objects_suggest_btn.mapToGlobal(QtCore.QPoint(0, self.find_objects_suggest_btn.height() + 4))
         menu.popup(origin)
 
-    def _find_objects_suggestion_target_row(self) -> Optional[ConditionRow]:
+    def _find_objects_target_group(self, target_group_id: Optional[int] = None) -> Dict[str, object]:
         if not self._find_objects_groups:
-            self._create_find_objects_group(add_initial_condition=False)
-        if not self._find_objects_groups:
-            return None
-        group = self._find_objects_groups[0]
-        rows = group.get("rows")
-        if isinstance(rows, list):
-            for row in rows:
-                if not isinstance(row, ConditionRow):
-                    continue
-                default_property = str(getattr(row, "_default_property_key", "") or "")
-                default_operator = str(getattr(row, "_default_operator_key", "") or "")
-                if row.value_text():
-                    continue
-                if row.property_key() == default_property and row.operator_key() == default_operator:
-                    return row
-        self._add_find_objects_condition_row(group)
-        rows = group.get("rows")
-        if isinstance(rows, list):
-            for row in reversed(rows):
-                if isinstance(row, ConditionRow):
-                    return row
-        return None
+            return self._create_find_objects_group(add_initial_condition=False)
+        wanted_id = int(target_group_id or self._find_objects_last_touched_group_id or 0)
+        group = self._find_objects_group_by_id(wanted_id) if wanted_id > 0 else None
+        if group is None and self._find_objects_groups:
+            group = self._find_objects_groups[-1]
+        if group is None:
+            group = self._create_find_objects_group(add_initial_condition=False)
+        return group
 
     def _populate_find_objects_condition_row(self, row: ConditionRow, descriptor: Mapping[str, str]) -> None:
+        category_key = str(descriptor.get("category") or "").strip()
         property_key = str(descriptor.get("property") or "").strip()
         operator_key = str(descriptor.get("operator") or "").strip()
         value_text = str(descriptor.get("value") or "").strip()
+        if category_key and hasattr(row, "category_combo"):
+            category_index = row.category_combo.findData(category_key)
+            if category_index >= 0:
+                row.category_combo.setCurrentIndex(category_index)
         if property_key:
             property_index = row.property_combo.findData(property_key)
             if property_index >= 0:
@@ -10697,10 +11017,8 @@ class MainWindow(QtWidgets.QMainWindow):
         }
         if not descriptor["property"] or not descriptor["operator"]:
             return
-        target_row = self._find_objects_suggestion_target_row()
-        if target_row is None:
-            return
-        self._populate_find_objects_condition_row(target_row, descriptor)
+        group = self._find_objects_target_group()
+        self._add_find_objects_condition_descriptor(group, descriptor)
         self._remember_find_objects_condition_descriptors([descriptor])
         self._on_find_objects_condition_row_changed()
 
@@ -11006,7 +11324,13 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_find_objects_scope_changed(self, _index: int) -> None:
         scope_key = str(self.find_objects_scope_combo.currentData() or "everywhere")
         self._set_find_objects_candidate_provider(scope_key)
+        self._update_find_objects_start_state()
         self.find_objects_scope_active.setText(f"Active: {self._find_objects_scope_label(self._find_objects_scope)}")
+        if hasattr(self, "find_objects_results_scope_label"):
+            self.find_objects_results_scope_label.setText(f"Scope: {self._find_objects_scope_label(self._find_objects_scope)}")
+            self.find_objects_results_scope_label.setVisible(
+                str(self._find_objects_scope or "").strip().lower() not in {"everywhere", ""}
+            )
         self._update_find_objects_scope_selection_ui()
         self._update_find_objects_scope_count()
         self._update_find_objects_footer_actions()
@@ -11023,19 +11347,31 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self.find_objects_scope_combo.setCurrentIndex(everywhere_index)
 
+    def _update_find_objects_start_state(self) -> None:
+        """Legacy: start state (deprecated by simplified builder)."""
+        if not hasattr(self, "find_objects_start_state_frame"):
+            return
+        self.find_objects_start_state_frame.setVisible(False)
+        if hasattr(self, "find_objects_advanced_frame"):
+            self.find_objects_advanced_frame.setVisible(True)
+        if hasattr(self, "find_objects_results_frame"):
+            self.find_objects_results_frame.setVisible(True)
+
     def _set_find_objects_advanced_visible(self, visible: bool) -> None:
         enabled = bool(visible)
         self.find_objects_advanced_frame.setVisible(enabled)
-        self.find_objects_filter_chip_wrap.setVisible(enabled)
         self.find_objects_advanced_toggle_btn.setArrowType(QtCore.Qt.DownArrow if enabled else QtCore.Qt.RightArrow)
+        self._render_find_objects_filter_chips()
 
     def _on_find_objects_advanced_toggled(self, checked: bool) -> None:
         self._set_find_objects_advanced_visible(bool(checked))
 
     def _refresh_find_objects_for_scope_change(self) -> None:
+        self._update_find_objects_start_state()
         self._update_find_objects_scope_selection_ui()
         self._update_find_objects_scope_count()
         self._update_find_objects_find_all_state()
+        self._render_find_objects_filter_chips()
         self._schedule_find_objects_live_search(immediate=True)
 
     def _refresh_find_objects_for_active_scope(self, scope_key: str) -> None:
@@ -11256,22 +11592,29 @@ class MainWindow(QtWidgets.QMainWindow):
 
         summary, tooltip = self._find_objects_scope_selection_summary(selected_ids)
 
+        clear_btn = getattr(self, "find_objects_scope_chip_clear_btn", None)
         if not is_selection_scope:
             warning.setVisible(False)
             chip.setVisible(False)
             chip.setText("")
             chip.setToolTip("")
+            if clear_btn is not None:
+                clear_btn.setVisible(False)
         elif selected_count <= 0:
             warning.setText("No selection in Object Tree")
             warning.setVisible(True)
             chip.setVisible(False)
             chip.setText("")
             chip.setToolTip("")
+            if clear_btn is not None:
+                clear_btn.setVisible(False)
         else:
             warning.setVisible(False)
             chip.setText(summary)
             chip.setToolTip(tooltip)
             chip.setVisible(True)
+            if clear_btn is not None:
+                clear_btn.setVisible(True)
         self._update_find_objects_scope_condition_row()
 
     def _update_find_objects_selected_count(self) -> None:
@@ -11341,7 +11684,16 @@ class MainWindow(QtWidgets.QMainWindow):
         query = str(self.find_objects_search_edit.text() or "").strip()
         has_conditions = bool(self._find_objects_active_condition_groups())
         if not query and not has_conditions:
-            return "Add a condition or use Quick search."
+            if self._find_objects_scope_uses_current_selection():
+                if not self._find_objects_scope_has_selection():
+                    return "No selection in Object Tree."
+                return "No elements found in selected scope."
+            scope_key = str(self._find_objects_scope or "").strip().lower()
+            if scope_key not in {"everywhere", ""}:
+                return "No elements found in selected scope."
+            if self.object_index.count == 0:
+                return "No model loaded. Open an IFC file to search."
+            return "No objects match current filters."
         return "No matches. Try changing operator, value, or scope."
 
     def _update_find_objects_matches_preview(self, count: Optional[int], *, invalid: bool = False) -> None:
@@ -11363,11 +11715,29 @@ class MainWindow(QtWidgets.QMainWindow):
         query = str(self.find_objects_search_edit.text() or "").strip()
         if query:
             return True
-        for row in self._find_objects_condition_rows():
-            if not row.is_active():
+        for group in list(getattr(self, "_find_objects_groups", []) or []):
+            conditions = group.get("conditions") if isinstance(group, dict) else None
+            if not isinstance(conditions, list):
                 continue
-            if row.has_missing_required_value():
-                continue
+            for condition in list(conditions):
+                if not isinstance(condition, Mapping):
+                    continue
+                prop = str(condition.get("property") or "").strip()
+                op = str(condition.get("operator") or "").strip()
+                value = str(condition.get("value") or "").strip()
+                if not prop or not op:
+                    continue
+                if op != "exists" and not value:
+                    continue
+                return True
+        # Any non-everywhere scope is itself an active filter — it restricts candidates
+        # to a subset (selected nodes, search set, etc.) without requiring extra conditions.
+        scope_key = str(self._find_objects_scope or "").strip().lower()
+        if scope_key not in {"everywhere", ""}:
+            return True
+        # Everywhere scope: allow "Find all" as a list-all operation when the model has
+        # indexed elements (scope_ready is always True for everywhere).
+        if scope_key == "everywhere" and self.object_index.count > 0:
             return True
         return False
 
@@ -11379,29 +11749,45 @@ class MainWindow(QtWidgets.QMainWindow):
             self.find_objects_find_btn.setEnabled(enabled)
         if hasattr(self, "find_objects_find_disabled_hint"):
             if (not scope_ready) and self._find_objects_scope_uses_current_selection():
+                # Waiting for tree selection — scope chip already signals the state.
                 self.find_objects_find_disabled_hint.setVisible(False)
+            elif not enabled:
+                # Derive a context-specific hint so the user knows what to do.
+                scope_key = str(self._find_objects_scope or "").strip().lower()
+                if scope_key in {"everywhere", ""} and self.object_index.count == 0:
+                    self.find_objects_find_disabled_hint.setText("Load a model to enable Find all.")
+                else:
+                    self.find_objects_find_disabled_hint.setText(
+                        "Select scope nodes or add a condition to enable Find all."
+                    )
+                self.find_objects_find_disabled_hint.setVisible(True)
             else:
-                self.find_objects_find_disabled_hint.setVisible(not enabled)
+                self.find_objects_find_disabled_hint.setVisible(False)
 
     def _find_objects_condition_rows(self) -> List[ConditionRow]:
         rows: List[ConditionRow] = []
-        for group in self._find_objects_groups:
-            group_rows = group.get("rows")
-            if not isinstance(group_rows, list):
-                continue
-            for row in group_rows:
-                if isinstance(row, ConditionRow):
-                    rows.append(row)
+        editor = getattr(self, "_find_objects_active_editor", None)
+        if isinstance(editor, dict):
+            row = editor.get("row")
+            if isinstance(row, ConditionRow):
+                rows.append(row)
         return rows
 
     def _validate_find_objects_conditions(self) -> bool:
-        has_errors = False
-        for row in self._find_objects_condition_rows():
-            missing_value = row.has_missing_required_value()
-            row.set_value_invalid(missing_value)
-            if missing_value:
-                has_errors = True
-        return not has_errors
+        for group in list(getattr(self, "_find_objects_groups", []) or []):
+            if not isinstance(group, dict):
+                continue
+            for condition in list(group.get("conditions") or []):
+                if not isinstance(condition, Mapping):
+                    continue
+                prop = str(condition.get("property") or "").strip()
+                op = str(condition.get("operator") or "").strip()
+                value = str(condition.get("value") or "").strip()
+                if not prop or not op:
+                    return False
+                if op != "exists" and not value:
+                    return False
+        return True
 
     def _schedule_find_objects_live_search(self, *, immediate: bool = False) -> None:
         self._find_objects_debounce_mode = "search"
@@ -11414,7 +11800,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _schedule_find_objects_quick_preview(self) -> None:
         self._find_objects_debounce_mode = "preview"
-        self._find_objects_debounce_timer.setInterval(300)
+        self._find_objects_debounce_timer.setInterval(250)
         self._find_objects_debounce_timer.stop()
         self._find_objects_debounce_timer.start()
 
@@ -11429,7 +11815,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self._find_objects_condition_counter = 0
         self._find_objects_group_counter = 0
         self._find_objects_last_touched_group_id = 0
+        self._find_objects_panel_opened = False
         self._find_objects_has_run = False
+        self._find_objects_active_editor = None
+        self._find_objects_match_logic = "and"
+        if hasattr(self, "find_objects_match_all_btn") and hasattr(self, "find_objects_match_any_btn"):
+            self.find_objects_match_all_btn.blockSignals(True)
+            self.find_objects_match_any_btn.blockSignals(True)
+            self.find_objects_match_all_btn.setChecked(True)
+            self.find_objects_match_any_btn.setChecked(False)
+            self.find_objects_match_all_btn.blockSignals(False)
+            self.find_objects_match_any_btn.blockSignals(False)
         for widget in self.find_objects_groups_body.findChildren(QtWidgets.QWidget):
             if widget is self.find_objects_groups_body:
                 continue
@@ -11440,7 +11836,8 @@ class MainWindow(QtWidgets.QMainWindow):
             if child is not None:
                 child.deleteLater()
         self.find_objects_groups_layout.addStretch(1)
-        self._create_find_objects_group(add_initial_condition=True)
+        # Do not render placeholder groups/rows. Groups and conditions are created explicitly
+        # via "Add group" / "Add condition".
         self._render_find_objects_filter_chips()
         self._update_find_objects_matches_preview(0)
         self._update_find_objects_find_all_state()
@@ -11498,14 +11895,16 @@ class MainWindow(QtWidgets.QMainWindow):
         logic_and_btn.setObjectName("FindObjectsLogicToggle")
         logic_and_btn.setText("AND")
         logic_and_btn.setCheckable(True)
-        logic_and_btn.setChecked(True)
+        logic_and_btn.setChecked(str(getattr(self, "_find_objects_match_logic", "and") or "and").strip().lower() != "or")
         logic_and_btn.setMinimumHeight(20)
         logic_or_btn = QtWidgets.QToolButton(frame)
         logic_or_btn.setObjectName("FindObjectsLogicToggle")
         logic_or_btn.setText("OR")
         logic_or_btn.setCheckable(True)
-        logic_or_btn.setChecked(False)
+        logic_or_btn.setChecked(str(getattr(self, "_find_objects_match_logic", "and") or "and").strip().lower() == "or")
         logic_or_btn.setMinimumHeight(20)
+        logic_and_btn.setVisible(False)
+        logic_or_btn.setVisible(False)
         logic_buttons = QtWidgets.QButtonGroup(frame)
         logic_buttons.setExclusive(True)
         logic_buttons.addButton(logic_and_btn)
@@ -11521,6 +11920,8 @@ class MainWindow(QtWidgets.QMainWindow):
         add_group_btn.setText("+G")
         add_group_btn.setToolTip("Add nested group")
         add_group_btn.setAutoRaise(True)
+        add_group_btn.setVisible(False)
+        add_condition_btn.setVisible(False)
 
         remove_group_btn = QtWidgets.QToolButton(frame)
         remove_group_btn.setObjectName("FindObjectsGroupRemoveBtn")
@@ -11554,7 +11955,7 @@ class MainWindow(QtWidgets.QMainWindow):
             "parent_id": int(parent_id),
             "level": int(level),
             "frame": frame,
-            "logic": "and",
+            "logic": "or" if str(getattr(self, "_find_objects_match_logic", "and") or "and").strip().lower() == "or" else "and",
             "connector": connector,
             "logic_and_btn": logic_and_btn,
             "logic_or_btn": logic_or_btn,
@@ -11564,7 +11965,8 @@ class MainWindow(QtWidgets.QMainWindow):
             "add_group_btn": add_group_btn,
             "rows_layout": rows_layout,
             "children_layout": children_layout,
-            "rows": [],
+            "conditions": [],
+            "condition_blocks": [],
             "children": [],
         }
         logic_and_btn.toggled.connect(lambda checked, gid=group_id: self._on_find_objects_group_logic_toggled(gid, "and", checked))
@@ -11586,7 +11988,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._find_objects_groups.append(group)
         self._find_objects_last_touched_group_id = int(group_id)
         if add_initial_condition:
-            self._add_find_objects_condition_row(group)
+            self._open_find_objects_condition_editor(group)
         self._refresh_find_objects_group_headers()
         return group
 
@@ -11639,12 +12041,12 @@ class MainWindow(QtWidgets.QMainWindow):
         parent_group = self._find_objects_group_parent(group)
         if isinstance(connector, QtWidgets.QLabel):
             if level <= 0:
-                connector.setText("AND")
+                connector.setText(self._find_objects_global_match_label())
                 connector.setVisible(root_count > 1 and root_index > 1)
             else:
-                parent_logic = "AND"
+                parent_logic = self._find_objects_global_match_label()
                 if parent_group is not None:
-                    parent_logic = str(parent_group.get("logic") or "and").strip().upper() or "AND"
+                    parent_logic = self._find_objects_global_match_label()
                 connector.setText(parent_logic)
                 connector.setVisible(True)
         if isinstance(remove_btn, QtWidgets.QToolButton):
@@ -11666,54 +12068,293 @@ class MainWindow(QtWidgets.QMainWindow):
                 total_groups=total_groups,
             )
 
-    def _add_find_objects_condition_row(self, group: Dict[str, object]) -> None:
+    def _close_find_objects_condition_editor(self) -> None:
+        editor = getattr(self, "_find_objects_active_editor", None)
+        if not isinstance(editor, dict):
+            self._find_objects_active_editor = None
+            return
+        widget = editor.get("widget")
+        if isinstance(widget, QtWidgets.QWidget):
+            widget.setParent(None)
+            widget.deleteLater()
+        self._find_objects_active_editor = None
+
+    def _open_find_objects_condition_editor(
+        self,
+        group: Dict[str, object],
+        *,
+        preset: Optional[Mapping[str, str]] = None,
+        edit_target: Optional[Dict[str, object]] = None,
+        edit_block: Optional[QtWidgets.QWidget] = None,
+    ) -> None:
+        if not isinstance(group, dict):
+            return
+        if isinstance(getattr(self, "_find_objects_active_editor", None), dict):
+            return
         rows_layout = group.get("rows_layout")
         if not isinstance(rows_layout, QtWidgets.QVBoxLayout):
             return
         group_id = int(group.get("id") or 0)
+
+        editor_frame = QtWidgets.QFrame(self.find_objects_groups_body)
+        editor_frame.setObjectName("FindObjectsConditionEditor")
+        editor_layout = QtWidgets.QVBoxLayout(editor_frame)
+        editor_layout.setContentsMargins(0, 0, 0, 0)
+        editor_layout.setSpacing(6)
+
         row = ConditionRow(
             self._find_objects_property_options(),
-            self.find_objects_groups_body,
+            editor_frame,
             distinct_values_provider=self._find_objects_distinct_values_for_property,
         )
-        row.changed.connect(lambda gid=group_id: self._on_find_objects_condition_row_changed(group_id=gid))
-        row.removeRequested.connect(self._remove_find_objects_condition_row)
-        rows_layout.addWidget(row, 0)
-        rows = group.get("rows")
-        if isinstance(rows, list):
-            rows.append(row)
-        self._find_objects_condition_counter += 1
+        row.set_progressive_enabled(False)
+        row.settings_btn.setVisible(False)
+        row.reset_btn.setVisible(False)
+        row.remove_btn.setVisible(False)
+        editor_layout.addWidget(row, 0)
+
+        actions_row = QtWidgets.QHBoxLayout()
+        actions_row.setContentsMargins(0, 0, 0, 0)
+        actions_row.setSpacing(8)
+        actions_row.addStretch(1)
+        cancel_btn = QtWidgets.QPushButton("Cancel", editor_frame)
+        cancel_btn.setObjectName("FindObjectsConditionEditorCancel")
+        confirm_btn = QtWidgets.QPushButton("Update" if edit_target is not None else "Add", editor_frame)
+        confirm_btn.setObjectName("FindObjectsConditionEditorConfirm")
+        confirm_btn.setEnabled(False)
+        actions_row.addWidget(cancel_btn, 0)
+        actions_row.addWidget(confirm_btn, 0)
+        editor_layout.addLayout(actions_row, 0)
+
+        def sync_confirm_state() -> None:
+            confirm_btn.setEnabled(bool(row.is_active()))
+
+        row.changed.connect(sync_confirm_state)
+        cancel_btn.clicked.connect(self._close_find_objects_condition_editor)
+        confirm_btn.clicked.connect(self._commit_find_objects_condition_editor)
+
+        rows_layout.addWidget(editor_frame, 0)
+        self._find_objects_active_editor = {
+            "group_id": int(group_id),
+            "widget": editor_frame,
+            "row": row,
+            "confirm_btn": confirm_btn,
+            "edit_target": edit_target,
+            "edit_block": edit_block,
+        }
         self._find_objects_last_touched_group_id = int(group_id)
-        self._refresh_find_objects_group_headers()
+        if preset is not None:
+            self._populate_find_objects_condition_row(row, preset)
+        sync_confirm_state()
+        row.focus_first_step()
 
-    def _group_for_condition_row(self, target_row: ConditionRow) -> Optional[Dict[str, object]]:
-        for group in self._find_objects_groups:
-            rows = group.get("rows")
-            if isinstance(rows, list) and target_row in rows:
-                return group
-        return None
-
-    def _remove_find_objects_condition_row(self, row_obj: object) -> None:
-        if not isinstance(row_obj, ConditionRow):
+    def _commit_find_objects_condition_editor(self) -> None:
+        editor = getattr(self, "_find_objects_active_editor", None)
+        if not isinstance(editor, dict):
             return
-        group = self._group_for_condition_row(row_obj)
+        group_id = int(editor.get("group_id") or 0)
+        row = editor.get("row")
+        if not isinstance(row, ConditionRow):
+            self._close_find_objects_condition_editor()
+            return
+        if not row.is_active():
+            row.set_value_invalid(row.has_missing_required_value())
+            return
+        descriptor = row.descriptor()
+        edit_target = editor.get("edit_target")
+        edit_block = editor.get("edit_block")
+        group = self._find_objects_group_by_id(group_id)
+        if group is None:
+            self._close_find_objects_condition_editor()
+            return
+        self._close_find_objects_condition_editor()
+        if isinstance(edit_target, dict):
+            edit_target.clear()
+            edit_target.update(dict(descriptor))
+            self._update_find_objects_rule_block_widget(edit_block, edit_target)
+        else:
+            self._add_find_objects_condition_descriptor(group, descriptor)
+        self._remember_find_objects_condition_descriptors([descriptor])
+        self._on_find_objects_condition_row_changed(group_id=group_id)
+
+    def _find_objects_condition_category_label(self, descriptor: Mapping[str, object]) -> str:
+        key = str(descriptor.get("category") or "").strip().lower()
+        if not key:
+            prop = str(descriptor.get("property") or "").strip()
+            key = str((getattr(ConditionRow, "_PROPERTY_SPECS", {}) or {}).get(prop, {}).get("category") or "").strip().lower()
+        if not key:
+            key = "item"
+        labels = getattr(ConditionRow, "_CATEGORY_LABELS", {}) or {}
+        return str(labels.get(key) or key.title()).strip()
+
+    def _find_objects_condition_property_label(self, descriptor: Mapping[str, object]) -> str:
+        return self._find_objects_property_label(str(descriptor.get("property") or "").strip())
+
+    def _find_objects_condition_operator_label(self, descriptor: Mapping[str, object]) -> str:
+        return self._find_objects_operator_label(str(descriptor.get("operator") or "").strip())
+
+    def _find_objects_condition_value_label(self, descriptor: Mapping[str, object]) -> str:
+        if str(descriptor.get("operator") or "").strip().lower() == "exists":
+            return ""
+        return str(descriptor.get("value") or "").strip()
+
+    def _update_find_objects_rule_block_widget(
+        self,
+        block: Optional[QtWidgets.QWidget],
+        descriptor: Mapping[str, object],
+    ) -> None:
+        if block is None:
+            return
+        cat = getattr(block, "_find_objects_cat_label", None)
+        prop = getattr(block, "_find_objects_prop_label", None)
+        op = getattr(block, "_find_objects_op_label", None)
+        value = getattr(block, "_find_objects_value_label", None)
+        if isinstance(cat, QtWidgets.QLabel):
+            cat.setText(self._find_objects_condition_category_label(descriptor))
+        if isinstance(prop, QtWidgets.QLabel):
+            prop.setText(self._find_objects_condition_property_label(descriptor))
+        if isinstance(op, QtWidgets.QLabel):
+            op.setText(self._find_objects_condition_operator_label(descriptor))
+        if isinstance(value, QtWidgets.QLabel):
+            text = self._find_objects_condition_value_label(descriptor)
+            value.setText(text)
+            value.setVisible(bool(text))
+
+    def _add_find_objects_condition_descriptor(self, group: Dict[str, object], descriptor: Mapping[str, object]) -> None:
+        if not isinstance(group, dict):
+            return
+        prop = str(descriptor.get("property") or "").strip()
+        op = str(descriptor.get("operator") or "").strip()
+        value = str(descriptor.get("value") or "").strip()
+        if not prop or not op:
+            return
+        if op != "exists" and not value:
+            return
+        conditions = group.get("conditions")
+        if not isinstance(conditions, list):
+            conditions = []
+            group["conditions"] = conditions
+        condition = dict(descriptor)
+        conditions.append(condition)
+
+        rows_layout = group.get("rows_layout")
+        if not isinstance(rows_layout, QtWidgets.QVBoxLayout):
+            return
+        group_id = int(group.get("id") or 0)
+
+        block = QtWidgets.QFrame(self.find_objects_groups_body)
+        block.setObjectName("FindObjectsRuleBlock")
+        block_layout = QtWidgets.QHBoxLayout(block)
+        block_layout.setContentsMargins(8, 6, 6, 6)
+        block_layout.setSpacing(8)
+
+        cat_label = QtWidgets.QLabel("", block)
+        cat_label.setObjectName("FindObjectsRuleBlockCategory")
+        prop_label = QtWidgets.QLabel("", block)
+        prop_label.setObjectName("FindObjectsRuleBlockProperty")
+        op_label = QtWidgets.QLabel("", block)
+        op_label.setObjectName("FindObjectsRuleBlockOperator")
+        value_label = QtWidgets.QLabel("", block)
+        value_label.setObjectName("FindObjectsRuleBlockValue")
+        for lbl in (cat_label, prop_label, op_label, value_label):
+            lbl.setWordWrap(False)
+            lbl.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+
+        parts = QtWidgets.QWidget(block)
+        parts.setObjectName("FindObjectsRuleBlockParts")
+        parts_layout = QtWidgets.QHBoxLayout(parts)
+        parts_layout.setContentsMargins(0, 0, 0, 0)
+        parts_layout.setSpacing(8)
+        parts_layout.addWidget(cat_label, 0)
+        parts_layout.addWidget(prop_label, 0)
+        parts_layout.addWidget(op_label, 0)
+        parts_layout.addWidget(value_label, 0)
+
+        edit_btn = QtWidgets.QToolButton(block)
+        edit_btn.setObjectName("FindObjectsRuleBlockEdit")
+        edit_btn.setText("✎")
+        edit_btn.setAutoRaise(True)
+        edit_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        edit_btn.setToolTip("Edit condition")
+        edit_btn.clicked.connect(
+            lambda _checked=False, gid=group_id, desc=condition, w=block: self._on_find_objects_edit_condition_descriptor(gid, desc, w)
+        )
+        remove_btn = QtWidgets.QToolButton(block)
+        remove_btn.setObjectName("FindObjectsRuleBlockRemove")
+        remove_btn.setText("×")
+        remove_btn.setAutoRaise(True)
+        remove_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        remove_btn.setToolTip("Remove condition")
+        remove_btn.clicked.connect(
+            lambda _checked=False, gid=group_id, desc=condition: self._remove_find_objects_condition_descriptor(gid, desc)
+        )
+
+        block_layout.addWidget(parts, 1)
+        block_layout.addWidget(edit_btn, 0, QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        block_layout.addWidget(remove_btn, 0, QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        block._find_objects_cat_label = cat_label
+        block._find_objects_prop_label = prop_label
+        block._find_objects_op_label = op_label
+        block._find_objects_value_label = value_label
+        self._update_find_objects_rule_block_widget(block, condition)
+
+        blocks = group.get("condition_blocks")
+        if not isinstance(blocks, list):
+            blocks = []
+            group["condition_blocks"] = blocks
+        blocks.append({"descriptor": condition, "widget": block})
+        rows_layout.addWidget(block, 0)
+        self._find_objects_last_touched_group_id = int(group_id)
+
+    def _remove_find_objects_condition_descriptor(self, group_id: int, descriptor: Mapping[str, object]) -> None:
+        group = self._find_objects_group_by_id(int(group_id or 0))
         if group is None:
             return
-        rows = group.get("rows")
-        rows_layout = group.get("rows_layout")
-        if isinstance(rows, list) and row_obj in rows:
-            rows.remove(row_obj)
-        if isinstance(rows_layout, QtWidgets.QVBoxLayout):
-            rows_layout.removeWidget(row_obj)
-        row_obj.deleteLater()
+        conditions = group.get("conditions")
+        if isinstance(conditions, list):
+            for idx, row in enumerate(list(conditions)):
+                if row is descriptor:
+                    conditions.pop(idx)
+                    break
+        blocks = group.get("condition_blocks")
+        if isinstance(blocks, list):
+            for entry in list(blocks):
+                if not isinstance(entry, dict):
+                    continue
+                if entry.get("descriptor") is descriptor:
+                    widget = entry.get("widget")
+                    if isinstance(widget, QtWidgets.QWidget):
+                        widget.setParent(None)
+                        widget.deleteLater()
+                    blocks.remove(entry)
+                    break
         child_groups = self._find_objects_group_children(group)
-        if isinstance(rows, list) and (not rows) and (not child_groups):
-            if len(self._find_objects_groups) > 1:
-                self._remove_find_objects_group(int(group.get("id") or 0))
-            else:
-                self._add_find_objects_condition_row(group)
-        self._refresh_find_objects_group_headers()
+        if (not list(group.get("conditions") or [])) and (not child_groups) and len(self._find_objects_groups) > 1:
+            self._remove_find_objects_group(int(group.get("id") or 0))
+            return
         self._on_find_objects_condition_row_changed(group_id=int(group.get("id") or 0))
+
+    def _on_find_objects_edit_condition_descriptor(
+        self,
+        group_id: int,
+        descriptor: Dict[str, object],
+        block_widget: Optional[QtWidgets.QWidget],
+    ) -> None:
+        editor = getattr(self, "_find_objects_active_editor", None)
+        if isinstance(editor, dict):
+            row = editor.get("row")
+            if isinstance(row, ConditionRow):
+                row.focus_first_step()
+            return
+        group = self._find_objects_group_by_id(int(group_id or 0))
+        if group is None:
+            return
+        self._open_find_objects_condition_editor(
+            group,
+            preset=descriptor,
+            edit_target=descriptor,
+            edit_block=block_widget,
+        )
 
     def _remove_find_objects_group(self, group_id: int, *, force: bool = False) -> None:
         if (not force) and len(self._find_objects_groups) <= 1:
@@ -11731,12 +12372,19 @@ class MainWindow(QtWidgets.QMainWindow):
                 parent_group["children"] = [int(value) for value in siblings if int(value or 0) != int(group_id or 0)]
 
         frame = target.get("frame")
-        rows = target.get("rows")
-        if isinstance(rows, list):
-            for row in list(rows):
-                if isinstance(row, QtWidgets.QWidget):
-                    row.deleteLater()
-            rows.clear()
+        editor = getattr(self, "_find_objects_active_editor", None)
+        if isinstance(editor, dict) and int(editor.get("group_id") or 0) == int(group_id or 0):
+            self._close_find_objects_condition_editor()
+        blocks = target.get("condition_blocks")
+        if isinstance(blocks, list):
+            for entry in list(blocks):
+                widget = entry.get("widget") if isinstance(entry, dict) else None
+                if isinstance(widget, QtWidgets.QWidget):
+                    widget.deleteLater()
+            blocks.clear()
+        conditions = target.get("conditions")
+        if isinstance(conditions, list):
+            conditions.clear()
         if isinstance(frame, QtWidgets.QWidget):
             if parent_group is not None:
                 parent_layout = parent_group.get("children_layout")
@@ -11747,40 +12395,80 @@ class MainWindow(QtWidgets.QMainWindow):
             frame.deleteLater()
 
         self._find_objects_groups = [group for group in self._find_objects_groups if int(group.get("id") or 0) != int(group_id or 0)]
-        if not self._find_objects_groups:
-            self._create_find_objects_group(add_initial_condition=True)
+        # No placeholder group.
         if self._find_objects_last_touched_group_id == int(group_id or 0):
             self._find_objects_last_touched_group_id = int(parent_group.get("id") or 0) if parent_group is not None else 0
         self._refresh_find_objects_group_headers()
         self._on_find_objects_condition_row_changed(group_id=self._find_objects_last_touched_group_id)
 
+    def _on_find_objects_add_filter_btn_clicked(self, checked: bool = False) -> None:
+        _ = checked
+        self._find_objects_panel_opened = True
+        if hasattr(self, "find_objects_advanced_frame") and not self.find_objects_advanced_frame.isVisible():
+            self._set_find_objects_advanced_visible(True)
+        self._on_find_objects_add_condition_clicked()
+
     def _on_find_objects_add_condition_clicked(self, checked: bool = False, target_group_id: Optional[int] = None) -> None:
         _ = checked
-        if not self._find_objects_groups:
-            self._create_find_objects_group(add_initial_condition=False)
-        group = None
-        wanted_id = int(target_group_id or self._find_objects_last_touched_group_id or 0)
-        if wanted_id > 0:
-            group = self._find_objects_group_by_id(wanted_id)
-        if group is None and self._find_objects_groups:
-            group = self._find_objects_groups[-1]
-        if group is None:
-            group = self._create_find_objects_group(add_initial_condition=False)
-        self._add_find_objects_condition_row(group)
+        editor = getattr(self, "_find_objects_active_editor", None)
+        if isinstance(editor, dict):
+            row = editor.get("row")
+            if isinstance(row, ConditionRow):
+                row.focus_first_step()
+            return
+        group = self._find_objects_target_group(target_group_id)
+        self._open_find_objects_condition_editor(group)
         self._on_find_objects_condition_row_changed(group_id=int(group.get("id") or 0))
 
     def _on_find_objects_add_group_clicked(self, checked: bool = False, parent_group_id: Optional[int] = None) -> None:
         _ = checked
         if not self._find_objects_groups:
-            self._create_find_objects_group(add_initial_condition=True)
+            self._create_find_objects_group(add_initial_condition=False)
             self._on_find_objects_condition_row_changed(group_id=self._find_objects_last_touched_group_id)
             return
         target_parent_id = int(parent_group_id or self._find_objects_last_touched_group_id or 0)
         group = self._create_find_objects_group(
-            add_initial_condition=True,
+            add_initial_condition=False,
             parent_group_id=target_parent_id if target_parent_id > 0 else None,
         )
         self._on_find_objects_condition_row_changed(group_id=int(group.get("id") or 0))
+
+    def _find_objects_global_match_label(self) -> str:
+        logic = str(getattr(self, "_find_objects_match_logic", "and") or "and").strip().lower()
+        return "OR" if logic == "or" else "AND"
+
+    def _set_find_objects_global_match_logic(self, logic: str, *, update_buttons: bool = True) -> None:
+        normalized = "or" if str(logic or "").strip().lower() == "or" else "and"
+        self._find_objects_match_logic = normalized
+        if update_buttons and hasattr(self, "find_objects_match_all_btn") and hasattr(self, "find_objects_match_any_btn"):
+            self.find_objects_match_all_btn.blockSignals(True)
+            self.find_objects_match_any_btn.blockSignals(True)
+            try:
+                self.find_objects_match_all_btn.setChecked(normalized != "or")
+                self.find_objects_match_any_btn.setChecked(normalized == "or")
+            finally:
+                self.find_objects_match_all_btn.blockSignals(False)
+                self.find_objects_match_any_btn.blockSignals(False)
+
+        for group in list(getattr(self, "_find_objects_groups", []) or []):
+            if not isinstance(group, dict):
+                continue
+            group["logic"] = normalized
+            and_btn = group.get("logic_and_btn")
+            or_btn = group.get("logic_or_btn")
+            if isinstance(and_btn, QtWidgets.QToolButton):
+                and_btn.setChecked(normalized != "or")
+            if isinstance(or_btn, QtWidgets.QToolButton):
+                or_btn.setChecked(normalized == "or")
+
+        self._refresh_find_objects_group_headers()
+        self._render_find_objects_filter_chips()
+        self._schedule_find_objects_quick_preview()
+
+    def _on_find_objects_global_match_toggled(self, logic: str, checked: bool) -> None:
+        if not checked:
+            return
+        self._set_find_objects_global_match_logic(logic)
 
     def _on_find_objects_group_logic_toggled(self, group_id: int, logic: str, checked: bool) -> None:
         if not checked:
@@ -11788,31 +12476,33 @@ class MainWindow(QtWidgets.QMainWindow):
         group = self._find_objects_group_by_id(group_id)
         if group is None:
             return
-        normalized = str(logic or "").strip().lower()
-        group["logic"] = "or" if normalized == "or" else "and"
         self._find_objects_last_touched_group_id = int(group_id)
-        self._refresh_find_objects_group_headers()
-        self._render_find_objects_filter_chips()
-        self._schedule_find_objects_live_search()
+        self._set_find_objects_global_match_logic(logic, update_buttons=True)
 
     def _on_find_objects_condition_row_changed(self, group_id: int = 0) -> None:
         if int(group_id or 0) > 0:
             self._find_objects_last_touched_group_id = int(group_id)
+        self._schedule_find_objects_quick_preview()
         self._render_find_objects_filter_chips()
         self._update_find_objects_find_all_state()
         self._update_find_objects_footer_actions()
-        self._schedule_find_objects_live_search()
+        self._update_find_objects_start_state()
 
     def _build_find_objects_active_group(self, group: Dict[str, object]) -> Optional[Dict[str, object]]:
-        rows = group.get("rows")
         descriptors: List[Dict[str, str]] = []
-        if isinstance(rows, list):
-            for row in rows:
-                if not isinstance(row, ConditionRow):
+        conditions = group.get("conditions")
+        if isinstance(conditions, list):
+            for condition in list(conditions):
+                if not isinstance(condition, Mapping):
                     continue
-                if not row.is_active():
+                prop = str(condition.get("property") or "").strip()
+                op = str(condition.get("operator") or "").strip()
+                value = str(condition.get("value") or "").strip()
+                if not prop or not op:
                     continue
-                descriptors.append(row.descriptor())
+                if op != "exists" and not value:
+                    continue
+                descriptors.append({str(k): str(v) for k, v in dict(condition).items() if v is not None})
 
         children_payload: List[Dict[str, object]] = []
         for child in self._find_objects_group_children(group):
@@ -11845,29 +12535,44 @@ class MainWindow(QtWidgets.QMainWindow):
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
-        chip_texts = self._find_objects_active_filter_chip_texts()
+        chip_data = self._find_objects_active_filter_chip_data()
+        chip_texts = [text for text, _ in chip_data]
         if not chip_texts:
-            empty = QtWidgets.QLabel("No active filters")
-            empty.setObjectName("SecondaryText")
-            layout.addWidget(empty, 0, 0)
+            self.find_objects_filter_chip_wrap.setVisible(False)
             return
         max_rows = 2
         max_per_row = 4
         max_visible = max_rows * max_per_row
-        visible = chip_texts[:max_visible]
-        for idx, text in enumerate(visible):
+        visible_data = chip_data[:max_visible]
+        for idx, (text, remove_fn) in enumerate(visible_data):
             row = idx // max_per_row
             col = idx % max_per_row
-            chip = QtWidgets.QLabel(text)
-            chip.setObjectName("FindObjectsFilterChip")
-            layout.addWidget(chip, row, col)
-        remaining = len(chip_texts) - len(visible)
+            chip_frame = QtWidgets.QFrame()
+            chip_frame.setObjectName("FindObjectsFilterChipFrame")
+            chip_inner = QtWidgets.QHBoxLayout(chip_frame)
+            chip_inner.setContentsMargins(6, 2, 2, 2)
+            chip_inner.setSpacing(3)
+            chip_label = QtWidgets.QLabel(text)
+            chip_label.setObjectName("FindObjectsFilterChipLabel")
+            chip_inner.addWidget(chip_label, 0)
+            remove_btn = QtWidgets.QToolButton(chip_frame)
+            remove_btn.setObjectName("FindObjectsChipRemoveBtn")
+            remove_btn.setText("×")
+            remove_btn.setAutoRaise(True)
+            remove_btn.setCursor(QtCore.Qt.PointingHandCursor)
+            remove_btn.setToolTip(f"Remove filter: {text}")
+            if remove_fn is not None:
+                remove_btn.clicked.connect(remove_fn)
+            chip_inner.addWidget(remove_btn, 0)
+            layout.addWidget(chip_frame, row, col)
+        remaining = len(chip_data) - len(visible_data)
         if remaining > 0:
             more_chip = QtWidgets.QLabel(f"+{remaining} more")
             more_chip.setObjectName("FindObjectsFilterChipMore")
             row = max_rows - 1
             col = max_per_row
             layout.addWidget(more_chip, row, col)
+        self.find_objects_filter_chip_wrap.setVisible(True)
 
     def _find_objects_active_filter_chip_texts(self) -> List[str]:
         chips: List[str] = []
@@ -11896,6 +12601,53 @@ class MainWindow(QtWidgets.QMainWindow):
             if isinstance(entry, Mapping):
                 push_group(entry, [int(group_index)])
         return chips
+
+    def _find_objects_active_filter_chip_data(
+        self,
+    ) -> List[Tuple[str, Optional[Callable[[], None]]]]:
+        """Return (label, remove_fn) pairs for all active filters."""
+        chips: List[Tuple[str, Optional[Callable[[], None]]]] = []
+        query = str(self.find_objects_search_edit.text() or "").strip()
+        if query:
+            chips.append((f"Search: {query}", self.find_objects_search_edit.clear))
+        scope_key = str(self.find_objects_scope_combo.currentData() or "everywhere")
+        if scope_key != "everywhere":
+            everywhere_index = self.find_objects_scope_combo.findData("everywhere")
+            chips.append((
+                f"Scope: {self._find_objects_scope_label(scope_key)}",
+                lambda idx=everywhere_index: self.find_objects_scope_combo.setCurrentIndex(idx) if idx >= 0 else None,
+            ))
+        for group_index, root_group in enumerate(self._find_objects_root_groups(), start=1):
+            self._collect_find_objects_condition_chip_data(chips, root_group, [group_index])
+        return chips
+
+    def _collect_find_objects_condition_chip_data(
+        self,
+        chips: List[Tuple[str, Optional[Callable[[], None]]]],
+        group: Dict[str, object],
+        path: List[int],
+    ) -> None:
+        path_label = "G" + ".".join(str(v) for v in path)
+        group_id = int(group.get("id") or 0)
+        for condition in list(group.get("conditions") or []):
+            if not isinstance(condition, Mapping):
+                continue
+            prop_key = str(condition.get("property") or "").strip()
+            op_key = str(condition.get("operator") or "").strip()
+            value = str(condition.get("value") or "").strip()
+            if not prop_key or not op_key:
+                continue
+            if op_key != "exists" and not value:
+                continue
+            prop = prop_key.replace("_", " ").title()
+            op = op_key.replace("_", " ")
+            text = f"{prop} {op}" if op_key == "exists" else f"{prop} {op} {value}".strip()
+            chips.append((
+                f"{path_label}: {text}",
+                lambda gid=group_id, desc=condition: self._remove_find_objects_condition_descriptor(gid, desc),
+            ))
+        for child_index, child in enumerate(self._find_objects_group_children(group), start=1):
+            self._collect_find_objects_condition_chip_data(chips, child, [*path, child_index])
 
     @staticmethod
     def _find_objects_extract_system_values(elem: Element) -> List[str]:
@@ -12484,32 +13236,36 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_find_objects_find_all_state()
         self._render_find_objects_filter_chips()
         self._update_find_objects_footer_actions()
+        self._update_find_objects_start_state()
         self._schedule_find_objects_quick_preview()
 
     def _run_find_objects_quick_preview(self) -> None:
         if self._find_objects_scope_uses_current_selection() and not self._find_objects_scope_has_selection():
             self._update_find_objects_matches_preview(0)
             return
+        if not self._validate_find_objects_conditions():
+            self._update_find_objects_matches_preview(None, invalid=True)
+            return
         query = str(self.find_objects_search_edit.text() or "").strip()
         groups = self._find_objects_active_condition_groups()
-        if not query:
-            if not groups:
-                self._update_find_objects_matches_preview(0)
-            return
-        # Keep pause-preview lightweight: only preview simple quick-search scans.
-        if groups:
+        if not query and not groups:
+            # Scope-only: preview candidate count for any scope (everywhere included).
+            candidates = self._find_objects_candidate_ids()
+            self._update_find_objects_matches_preview(len(candidates))
             return
         candidates = self._find_objects_candidate_ids()
         if len(candidates) > 12000:
             return
-        tokens = self._find_objects_query_tokens(query)
-        if not tokens:
-            self._update_find_objects_matches_preview(0)
-            return
+        tokens = self._find_objects_query_tokens(query) if query else []
         count = 0
         for guid in candidates:
-            if self._find_objects_query_matches_guid(guid, tokens, query):
-                count += 1
+            if query and not self._find_objects_query_matches_guid(guid, tokens, query):
+                continue
+            if groups:
+                elem = self.state.ifc_index.get(guid)
+                if elem is None or not self._find_objects_match_condition_groups(elem, groups):
+                    continue
+            count += 1
         self._update_find_objects_matches_preview(count)
 
     def _run_find_objects_live_search(self) -> None:
@@ -12552,6 +13308,16 @@ class MainWindow(QtWidgets.QMainWindow):
         has_query = bool(tokens)
         has_conditions = bool(groups)
         if not has_query and not has_conditions:
+            # Scope-only: any scope (including everywhere) with candidates yields those
+            # candidates directly as matches — no extra filter is needed.
+            candidates = self._find_objects_candidate_ids()
+            print(f"[FindObjects DEBUG] scope-only — scope: {self._find_objects_scope!r}, candidates: {len(candidates)}, matches: {len(candidates)}")
+            if candidates:
+                self._find_objects_has_run = True
+                self._find_objects_last_results = list(candidates)
+                self._update_find_objects_matches_preview(len(candidates))
+                self._render_find_objects_results(candidates, placeholder=self._find_objects_empty_placeholder())
+                return
             self._find_objects_has_run = False
             self._find_objects_last_results = []
             self._update_find_objects_matches_preview(0)
@@ -12559,6 +13325,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self._find_objects_has_run = bool(has_query or has_conditions)
         candidates = self._find_objects_candidate_ids()
+        print(f"[FindObjects DEBUG] candidates: {len(candidates)}, scope: {self._find_objects_scope!r}")
         matches: List[str] = []
         for guid in candidates:
             elem = self.state.ifc_index.get(guid)
@@ -12569,6 +13336,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if has_conditions and not self._find_objects_match_condition_groups(elem, groups):
                 continue
             matches.append(guid)
+        print(f"[FindObjects DEBUG] matches: {len(matches)}")
         self._find_objects_last_results = list(matches)
         self._update_find_objects_matches_preview(len(matches))
         self._render_find_objects_results(matches, placeholder=self._find_objects_empty_placeholder())
@@ -12579,7 +13347,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if had_query:
             self.find_objects_search_edit.clear()
         self._find_objects_last_query = ""
+        self._find_objects_panel_opened = False
         self._update_find_objects_find_all_state()
+        self._update_find_objects_start_state()
         self._schedule_find_objects_live_search(immediate=True)
 
     def _build_find_objects_result_row(self, guid: str) -> Optional[Dict[str, str]]:
@@ -12620,6 +13390,11 @@ class MainWindow(QtWidgets.QMainWindow):
         rows = [str(guid) for guid in list(result_ids or []) if str(guid).strip() and str(guid) in self.state.ifc_index]
         self.find_objects_results_title.setText(f"Results ({len(rows)})")
         self.find_objects_results_count_large.setText(f"{len(rows)} objects found")
+        if hasattr(self, "find_objects_results_scope_label"):
+            self.find_objects_results_scope_label.setText(f"Scope: {self._find_objects_scope_label(self._find_objects_scope)}")
+            self.find_objects_results_scope_label.setVisible(
+                str(self._find_objects_scope or "").strip().lower() not in {"everywhere", ""}
+            )
         has_results = bool(rows)
         self.find_objects_select_all_btn.setEnabled(has_results)
         self.find_objects_isolate_btn.setEnabled(has_results)

@@ -66,6 +66,30 @@
   - Show Properties
 - `Show Properties` now **does not auto-switch tabs**. It keeps current mode, syncs selection, and preloads the Inspect properties data; if already in Inspect, it focuses the Properties panel.
 
+## Find Objects Panel
+
+See [docs/find-objects.md](docs/find-objects.md) for the full reference.
+
+Summary of current layout and behavior:
+
+- **Minimal header**: single primary row `[Scope combo] [Quick search] [Find all]`,
+  plus a meta row with filter chips and `+ Add filter`.
+- **Filter chips**: each active filter (search text, non-Everywhere scope, every
+  condition row) renders as a removable chip.  Clicking `×` on a chip removes
+  that specific filter and re-runs the preview.
+- **Advanced filters**: condition rows with AND/OR group logic.  The operator
+  list is filtered to kinds appropriate for the selected property
+  (`number / string / boolean / enum / enum_dynamic`).
+- **Numeric shorthand**: entering `<100`, `>50`, `<=200`, `>=75` in a numeric
+  value field is silently translated to the correct operator + bare value
+  inside `ConditionRow.descriptor()`.
+- **Debounced preview**: any change to search, scope, or conditions schedules a
+  250 ms debounce that updates the *Matches: N* counter without touching the
+  table.  `Find all` still populates the table explicitly.
+- **Options menu**: *Prune below result* and *Elements only* live in a `⋯ Options`
+  QToolButton/QMenu in the action footer; their underlying checkboxes are kept
+  hidden for behavior-code compatibility.
+
 ## Search Sets UX Scaffold
 - Search Sets list now shows checkbox + count in label (`Set Name (N)`).
 - Added `Pick in 3D`:
